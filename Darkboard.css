@@ -1951,7 +1951,7 @@ section{
 .stat-card:hover {
     background: rgba(0, 212, 255, 0.1);
     border-color: #00d4ff;
-    transition: translate(-5%);
+    transform: translate(-5px);
 }
 
 .stat-value {

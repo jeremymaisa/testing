@@ -3979,8 +3979,9 @@ body.light-mode .btn-submit {
 /* For score button */
 /* Task Score Display - Inline with task meta */
 .task-score {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  color: white;
+  background: rgba(0, 212, 255, 0.1);
+  color: var(--accent);
+  border: 1px solid rgba(0, 212, 255, 0.3);
   padding: 6px 12px;
   border-radius: 6px;
   display: inline-flex;
@@ -4018,7 +4019,8 @@ body.light-mode .btn-submit {
   white-space: nowrap;
 }
 
-.btn-score-task:hover {
+.btn-score-task:hover,
+.task-score:hover {
   background: var(--accent);
   color: var(--bg-primary);
 }

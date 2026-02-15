@@ -1,0 +1,49 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Users can only read/write their own profile
+    match /users/{userId} {
+      allow read, write: if request.auth != null && request.auth.uid == userId;
+    }
+
+    // Subjects: Allow read/write for authenticated users in the same course
+    match /subjects/{courseId} {
+      allow read, write: if request.auth != null &&
+                          exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                          get(/databases/$(database)/documents/users/$(request.auth.uid)).data.course == courseId;
+
+      // Tasks subcollection
+      match /tasks/{taskId} {
+        allow read, write: if request.auth != null &&
+                            exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.course == courseId;
+      }
+
+      // Assignments subcollection
+      match /assignments/{assignmentId} {
+        allow read, write: if request.auth != null &&
+                            exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.course == courseId;
+      }
+
+      // Lessons subcollection
+      match /lessons/{lessonId} {
+        allow read, write: if request.auth != null &&
+                            exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.course == courseId;
+      }
+
+      // Quizzes subcollection
+      match /quizzes/{quizId} {
+        allow read, write: if request.auth != null &&
+                            exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+                            get(/databases/$(database)/documents/users/$(request.auth.uid)).data.course == courseId;
+      }
+    }
+
+    // Orders collection: Allow authenticated users to read/write their own orders
+    match /orders/{orderId} {
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.customerId;
+    }
+  }
+}

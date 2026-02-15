@@ -540,11 +540,15 @@ function initializeSubjects() {
           </div>
           <div class="items-list">
             ${sub.tasks.map((task, i) => `<div class="item-card">
-                <h4>${task.title}</h4>
-                <p class="item-meta">Due: ${task.dueDate} | Priority: ${task.priority} | Status: ${task.status}</p>
-                <p>${task.description}</p>
-                ${task.file ? `<div class="file-attachment"><i class="fas fa-paperclip"></i> <a href="${task.fileUrl}" target="_blank">${task.file}</a></div>` : ''}
-                ${task.score !== undefined && task.score !== null ? `<div class="task-score"><i class="fas fa-star"></i> Score: <strong>${task.score}/100</strong></div>` : ''}
+                <div class="item-info">
+                  <h4>${task.title}</h4>
+                  <p class="item-meta">
+                    Due: ${task.dueDate} | Priority: ${task.priority} | Status: ${task.status}
+                    ${task.score !== undefined && task.score !== null ? `<span class="task-score"><i class="fas fa-star"></i> Score: <strong>${task.score}/100</strong></span>` : ''}
+                  </p>
+                  <p>${task.description}</p>
+                  ${task.file ? `<div class="file-attachment"><i class="fas fa-paperclip"></i> <a href="${task.fileUrl}" target="_blank">${task.file}</a></div>` : ''}
+                </div>
                 ${isInstructor ? `<div class="item-actions">
                   <button class="btn-edit-item" data-type="task" data-item-index="${i}" data-subject-index="${index}"><i class="fas fa-edit"></i></button>
                   <button class="btn-delete-item" data-type="task" data-item-index="${i}" data-subject-index="${index}"><i class="fas fa-trash"></i></button>
@@ -561,20 +565,24 @@ function initializeSubjects() {
           </div>
           <div class="items-list">
             ${sub.assignments.map((assignment, i) => `<div class="item-card">
-                <h4>${assignment.title}</h4>
-                <p class="item-meta">Due: ${assignment.dueDate} | Points: ${assignment.points} | Status: ${assignment.status}</p>
-                <p>${assignment.instructions}</p>
-                ${assignment.file ? `<div class="file-attachment"><i class="fas fa-paperclip"></i> <a href="${assignment.fileUrl}" target="_blank">${assignment.file}</a></div>` : ''}
+                <div class="item-info">
+                  <h4>${assignment.title}</h4>
+                  <p class="item-meta">
+                    Due: ${assignment.dueDate} | Points: ${assignment.points} | Status: ${assignment.status}
+                    ${assignment.score !== undefined && assignment.score !== null ? `<span class="task-score"><i class="fas fa-star"></i> Score: <strong>${assignment.score}/100</strong></span>` : ''}
+                  </p>
+                  <p>${assignment.instructions}</p>
+                  ${assignment.file ? `<div class="file-attachment"><i class="fas fa-paperclip"></i> <a href="${assignment.fileUrl}" target="_blank">${assignment.file}</a></div>` : ''}
+                </div>
                 ${!isInstructor ? `<div class="item-actions">
                   <button class="btn-submit-assignment" data-assignment-index="${i}" data-subject-index="${index}"><i class="fas fa-upload"></i> Submit Assignment</button>
                   ${assignment.submissions && assignment.submissions.find(s => s.studentId === userData.id) ? '<span class="submitted-badge"><i class="fas fa-check-circle"></i> Submitted</span>' : ''}
                 </div>` : `<div class="item-actions">
                   <button class="btn-view-submissions" data-assignment-index="${i}" data-subject-index="${index}"><i class="fas fa-eye"></i> View Submissions (${assignment.submissions ? assignment.submissions.length : 0})</button>
-                </div>`}
-                ${isInstructor ? `<div class="item-actions">
                   <button class="btn-edit-item" data-type="assignment" data-item-index="${i}" data-subject-index="${index}"><i class="fas fa-edit"></i></button>
                   <button class="btn-delete-item" data-type="assignment" data-item-index="${i}" data-subject-index="${index}"><i class="fas fa-trash"></i></button>
-                </div>` : ''}
+                  <button class="btn-score-task" data-assignment-index="${i}" data-subject-index="${index}"><i class="fas fa-award"></i> Score</button>
+                </div>`}
               </div>`).join('')}
           </div>
         </div>
@@ -691,9 +699,16 @@ function initializeSubjects() {
     // Add click listeners for Score Task buttons
     document.querySelectorAll('.btn-score-task').forEach(btn => {
       btn.addEventListener('click', (e) => {
-        const taskIndex = parseInt(btn.dataset.taskIndex);
-        const subjectIndex = parseInt(btn.dataset.subjectIndex);
-        openScoreTaskModal(subjectIndex, taskIndex);
+        // Check if it's a task or assignment
+        if (btn.dataset.taskIndex !== undefined) {
+          const taskIndex = parseInt(btn.dataset.taskIndex);
+          const subjectIndex = parseInt(btn.dataset.subjectIndex);
+          openScoreTaskModal(subjectIndex, taskIndex);
+        } else if (btn.dataset.assignmentIndex !== undefined) {
+          const assignmentIndex = parseInt(btn.dataset.assignmentIndex);
+          const subjectIndex = parseInt(btn.dataset.subjectIndex);
+          openScoreAssignmentModal(subjectIndex, assignmentIndex);
+        }
       });
     });
   }
@@ -752,12 +767,82 @@ function initializeSubjects() {
       sub.tasks[taskIndex].scoredAt = new Date().toISOString();
 
       // Save to localStorage and Firebase
-      saveSubjects();
+      await saveSubjects();
+      
+      // Explicitly save to Firestore to ensure persistence
+      await saveSubjectsToFirestore();
 
       // Re-render the subject details
       renderSubjectDetails(subjectIndex);
 
-      alert('Score saved successfully!');
+      alert('Score saved successfully to Firebase! Students can now see it.');
+      modal.remove();
+    });
+  }
+
+  // -------------------------
+  // OPEN SCORE ASSIGNMENT MODAL
+  // -------------------------
+  function openScoreAssignmentModal(subjectIndex, assignmentIndex) {
+    const sub = subjects[subjectIndex];
+    if (!sub) return;
+    const assignment = sub.assignments[assignmentIndex];
+    if (!assignment) return;
+
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.id = 'scoreAssignmentModal';
+    modal.innerHTML = `<div class="modal-content">
+        <span class="close">&times;</span>
+        <div class="modal-body">
+          <h2><i class="fas fa-award"></i> Score Assignment: ${assignment.title}</h2>
+          <form id="scoreAssignmentForm">
+            <div class="form-group">
+              <label>Score (0-100)</label>
+              <input type="number" id="assignmentScore" min="0" max="100" value="${assignment.score || 0}" required placeholder="Enter score (0-100)" />
+            </div>
+            <div class="form-group">
+              <label>Feedback (Optional)</label>
+              <textarea id="assignmentFeedback" rows="3" placeholder="Provide feedback for the student...">${assignment.feedback || ''}</textarea>
+            </div>
+            <button type="submit" class="btn-add-subject">
+              <i class="fas fa-check"></i> Save Score
+            </button>
+          </form>
+        </div>
+      </div>`;
+
+    document.body.appendChild(modal);
+    modal.style.display = 'block';
+
+    modal.querySelector('.close').addEventListener('click', () => modal.remove());
+
+    modal.querySelector('#scoreAssignmentForm').addEventListener('submit', async (e) => {
+      e.preventDefault();
+
+      const score = parseInt(document.getElementById('assignmentScore').value);
+      const feedback = document.getElementById('assignmentFeedback').value.trim();
+
+      if (score < 0 || score > 100) {
+        alert('Score must be between 0 and 100');
+        return;
+      }
+
+      // Update assignment with score and feedback
+      sub.assignments[assignmentIndex].score = score;
+      sub.assignments[assignmentIndex].feedback = feedback;
+      sub.assignments[assignmentIndex].scoredAt = new Date().toISOString();
+
+      // Save to localStorage and Firebase
+      await saveSubjects();
+      
+      // Explicitly save to Firestore to ensure persistence
+      await saveSubjectsToFirestore();
+
+      // Re-render the subject details
+      renderSubjectDetails(subjectIndex);
+
+      alert('Score saved successfully to Firebase! Students can now see it.');
       modal.remove();
     });
   }
@@ -998,7 +1083,9 @@ function initializeSubjects() {
       instructions: document.getElementById('newAssignmentInstructions').value.trim(),
       file: null,
       fileUrl: null,
-      submissions: []
+      submissions: [],
+      score: null,
+      feedback: null
     };
 
     const fileInput = document.getElementById('newAssignmentFile');
@@ -1042,7 +1129,7 @@ function initializeSubjects() {
     }
 
     sub.assignments[itemIndex] = {
-      ...sub.assignments[itemIndex], // Preserve id and submissions
+      ...sub.assignments[itemIndex], // Preserve id, submissions, score, and feedback
       title: document.getElementById('editAssignmentTitle').value.trim(),
       dueDate: document.getElementById('editAssignmentDueDate').value,
       points: parseInt(document.getElementById('editAssignmentPoints').value),

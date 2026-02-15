@@ -4156,7 +4156,7 @@ body.light-mode .btn-score-task:hover {
 /* Responsive Design - Small Mobile */
 @media (max-width: 480px) {
   .item-card {
-    padding: 12px;
+    padding: 20px;
   }
   
   .item-info h4 {

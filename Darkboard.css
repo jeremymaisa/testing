@@ -4005,7 +4005,7 @@ body.light-mode .btn-submit {
 .btn-score-task {
   background: rgba(0, 212, 255, 0.1);
   border: 1px solid rgba(0, 212, 255, 0.3);
-  color: white;
+  color: var(--accent);
   padding: 8px 12px;
   border-radius: 6px;
   cursor: pointer;
@@ -4019,7 +4019,7 @@ body.light-mode .btn-submit {
 }
 
 .btn-score-task:hover {
-  background: #00d4ff;
+  background: var(--accent);
 }
 
 .btn-score-task i {

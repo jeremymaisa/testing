@@ -3976,43 +3976,44 @@ body.light-mode .btn-submit {
     color: var(--bg-primary);
 }
 
-/* Task Score Display */
+/* For score button*/
 .task-score {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
-  padding: 10px 15px;
-  border-radius: 8px;
-  margin-top: 10px;
+  padding: 6px 12px;
+  border-radius: 6px;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   font-weight: 600;
   box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+  font-size: 0.9em;
+  margin-left: 10px;
 }
 
 .task-score i {
-  font-size: 1.1em;
+  font-size: 1em;
   color: #ffd700;
 }
 
 .task-score strong {
-  font-size: 1.1em;
+  font-size: 1em;
 }
 
-/* Score Task Button */
+/* Score Task Button - Add to existing item actions */
 .btn-score-task {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
   border: none;
-  padding: 8px 16px;
+  padding: 8px 12px;
   border-radius: 6px;
   cursor: pointer;
   font-weight: 600;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 5px;
   transition: all 0.3s ease;
-  margin-left: 8px;
+  font-size: 0.9em;
 }
 
 .btn-score-task:hover {
@@ -4040,27 +4041,12 @@ body.light-mode .btn-submit {
   resize: vertical;
 }
 
-/* Item Actions Layout */
-.item-actions {
+/* Make sure item-meta has room for score badge */
+.item-meta {
   display: flex;
-  gap: 8px;
-  margin-top: 12px;
+  align-items: center;
   flex-wrap: wrap;
-}
-
-/* Enhanced Item Card for Better Score Visibility */
-.item-card {
-  background: var(--card-bg);
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  padding: 20px;
-  margin-bottom: 16px;
-  transition: all 0.3s ease;
-}
-
-.item-card:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+  gap: 5px;
 }
 
 /* Light Mode Adjustments */
@@ -4078,17 +4064,13 @@ body.light-mode .btn-score-task:hover {
 
 /* Responsive Design */
 @media (max-width: 768px) {
-  .item-actions {
-    flex-direction: column;
-  }
-  
   .btn-score-task {
     width: 100%;
     justify-content: center;
   }
   
   .task-score {
-    width: 100%;
-    justify-content: center;
+    margin-left: 0;
+    margin-top: 8px;
   }
 }

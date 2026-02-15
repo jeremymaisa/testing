@@ -3183,9 +3183,9 @@ body.light-mode .subjects-list  {
     border: 2px solid rgba(0, 212, 255, 0.1);
 }
 
-body.light-mode .subjects-list-item  {
-    background-color: #f1eeee;
-    border: 2px solid rgba(0, 212, 255, 0.1);
+body.light-mode .subject-list-item {
+    background-color: #d1d1d1;
+    border: 2px solid transparent;
 }
 
 @media (max-width: 768px) {

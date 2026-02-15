@@ -3976,7 +3976,8 @@ body.light-mode .btn-submit {
     color: var(--bg-primary);
 }
 
-/* For score button*/
+/* For score button */
+/* Task Score Display - Inline with task meta */
 .task-score {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
@@ -4014,6 +4015,7 @@ body.light-mode .btn-submit {
   gap: 5px;
   transition: all 0.3s ease;
   font-size: 0.9em;
+  white-space: nowrap;
 }
 
 .btn-score-task:hover {
@@ -4049,6 +4051,21 @@ body.light-mode .btn-submit {
   gap: 5px;
 }
 
+/* Ensure item cards are responsive */
+.item-card {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+/* Item actions responsive layout */
+.item-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
 /* Light Mode Adjustments */
 body.light-mode .task-score {
   box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
@@ -4062,15 +4079,96 @@ body.light-mode .btn-score-task:hover {
   box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
 }
 
-/* Responsive Design */
-@media (max-width: 768px) {
+/* Responsive Design - Tablets */
+@media (max-width: 1024px) {
+  .item-card {
+    padding: 18px;
+  }
+  
   .btn-score-task {
-    width: 100%;
-    justify-content: center;
+    padding: 7px 10px;
+    font-size: 0.85em;
+  }
+  
+  .task-score {
+    padding: 5px 10px;
+    font-size: 0.85em;
+    margin-left: 8px;
+  }
+}
+
+/* Responsive Design - Mobile */
+@media (max-width: 768px) {
+  .item-card {
+    padding: 15px;
+    gap: 12px;
+  }
+  
+  .item-info h4 {
+    font-size: 1em;
+  }
+  
+  .item-info p {
+    font-size: 0.85em;
+  }
+  
+  .item-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
   }
   
   .task-score {
     margin-left: 0;
-    margin-top: 8px;
+    width: fit-content;
+    font-size: 0.85em;
+  }
+  
+  .item-actions {
+    width: 100%;
+    gap: 8px;
+  }
+  
+  .btn-edit-item,
+  .btn-delete-item,
+  .btn-score-task {
+    flex: 1;
+    min-width: 0;
+    justify-content: center;
+    padding: 10px 8px;
+    font-size: 0.85em;
+  }
+  
+  /* Stack buttons on very small screens */
+  @media (max-width: 480px) {
+    .item-actions {
+      flex-direction: column;
+    }
+    
+    .btn-edit-item,
+    .btn-delete-item,
+    .btn-score-task {
+      width: 100%;
+    }
+  }
+}
+
+/* Responsive Design - Small Mobile */
+@media (max-width: 480px) {
+  .item-card {
+    padding: 12px;
+  }
+  
+  .item-info h4 {
+    font-size: 0.95em;
+  }
+  
+  .task-score {
+    font-size: 0.8em;
+    padding: 4px 8px;
+  }
+  
+  .task-score i {
+    font-size: 0.9em;
   }
 }

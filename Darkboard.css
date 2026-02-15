@@ -3188,6 +3188,11 @@ body.light-mode .subject-list-item {
     border: 2px solid transparent;
 }
 
+body.light-mode .subject-list-item:hover {
+    background-color: #d3d3d3;
+    border: 2px solid transparent;
+}
+
 @media (max-width: 768px) {
 
     .settings-container {

@@ -4004,7 +4004,6 @@ body.light-mode .btn-submit {
   align-items: center;
   gap: 6px;
   font-weight: 600;
-  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
   font-size: 0.9em;
   margin-left: 10px;
 }

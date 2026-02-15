@@ -4020,6 +4020,7 @@ body.light-mode .btn-submit {
 
 .btn-score-task:hover {
   background: var(--accent);
+  color: var(--bg-primary);
 }
 
 .btn-score-task i {

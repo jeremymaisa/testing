@@ -775,7 +775,7 @@ function initializeSubjects() {
       // Re-render the subject details
       renderSubjectDetails(subjectIndex);
 
-      alert('Score saved successfully to Firebase! Students can now see it.');
+      alert('Score saved successfully');
       modal.remove();
     });
   }
@@ -842,7 +842,7 @@ function initializeSubjects() {
       // Re-render the subject details
       renderSubjectDetails(subjectIndex);
 
-      alert('Score saved successfully to Firebase! Students can now see it.');
+      alert('Score saved successfully');
       modal.remove();
     });
   }

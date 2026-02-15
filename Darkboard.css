@@ -3190,7 +3190,7 @@ body.light-mode .subject-list-item {
 }
 
 body.light-mode .subject-list-item:hover {
-    background-color: #a6a1a1;
+    background-color: #a6a1a1 !important;
     border: 2px solid transparent;
 }
 

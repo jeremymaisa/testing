@@ -4003,9 +4003,9 @@ body.light-mode .btn-submit {
 
 /* Score Task Button - Add to existing item actions */
 .btn-score-task {
-  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  background: rgba(0, 212, 255, 0.1);
+  border: 1px solid rgba(0, 212, 255, 0.3);
   color: white;
-  border: none;
   padding: 8px 12px;
   border-radius: 6px;
   cursor: pointer;
@@ -4019,8 +4019,7 @@ body.light-mode .btn-submit {
 }
 
 .btn-score-task:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  background: #00d4ff;
 }
 
 .btn-score-task i {

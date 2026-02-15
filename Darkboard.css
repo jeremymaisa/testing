@@ -3975,3 +3975,120 @@ body.light-mode .btn-submit {
     background: #4ade80;
     color: var(--bg-primary);
 }
+
+/* Task Score Display */
+.task-score {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  padding: 10px 15px;
+  border-radius: 8px;
+  margin-top: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-weight: 600;
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.3);
+}
+
+.task-score i {
+  font-size: 1.1em;
+  color: #ffd700;
+}
+
+.task-score strong {
+  font-size: 1.1em;
+}
+
+/* Score Task Button */
+.btn-score-task {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.3s ease;
+  margin-left: 8px;
+}
+
+.btn-score-task:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.btn-score-task i {
+  font-size: 1em;
+}
+
+/* Score Modal Styling */
+#scoreTaskModal .modal-content {
+  max-width: 500px;
+}
+
+#scoreTaskModal .form-group input[type="number"] {
+  font-size: 1.2em;
+  font-weight: 600;
+  text-align: center;
+}
+
+#scoreTaskModal .form-group textarea {
+  min-height: 100px;
+  resize: vertical;
+}
+
+/* Item Actions Layout */
+.item-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
+  flex-wrap: wrap;
+}
+
+/* Enhanced Item Card for Better Score Visibility */
+.item-card {
+  background: var(--card-bg);
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  padding: 20px;
+  margin-bottom: 16px;
+  transition: all 0.3s ease;
+}
+
+.item-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* Light Mode Adjustments */
+body.light-mode .task-score {
+  box-shadow: 0 2px 8px rgba(102, 126, 234, 0.2);
+}
+
+body.light-mode .btn-score-task {
+  box-shadow: 0 2px 6px rgba(102, 126, 234, 0.2);
+}
+
+body.light-mode .btn-score-task:hover {
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+  .item-actions {
+    flex-direction: column;
+  }
+  
+  .btn-score-task {
+    width: 100%;
+    justify-content: center;
+  }
+  
+  .task-score {
+    width: 100%;
+    justify-content: center;
+  }
+}

@@ -3519,8 +3519,6 @@ body.light-mode .btn-submit {
     flex: 1;
     overflow-y: auto;
     padding: 15px;
-    border: 1px solid rgba(0, 212, 255, 0.1);
-    background: #f1eeee;
 }
 
 .subject-list-item {
@@ -3530,7 +3528,7 @@ body.light-mode .btn-submit {
     cursor: pointer;
     transition: 0.3s;
     border: 1px solid transparent;
-    background: #a6a6a6;
+    background: rgba(255, 255, 255, 0.02);
 }
 
 .subject-list-item:hover {

@@ -574,7 +574,6 @@ function initializeSubjects() {
                 ${isInstructor ? `<div class="item-actions">
                   <button class="btn-edit-item" data-type="assignment" data-item-index="${i}" data-subject-index="${index}"><i class="fas fa-edit"></i></button>
                   <button class="btn-delete-item" data-type="assignment" data-item-index="${i}" data-subject-index="${index}"><i class="fas fa-trash"></i></button>
-                  <button class="btn-score-task" data-task-index="${i}" data-subject-index="${index}"><i class="fas fa-award"></i> Score</button>
                 </div>` : ''}
               </div>`).join('')}
           </div>

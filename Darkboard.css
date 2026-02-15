@@ -3178,6 +3178,11 @@ body.light-mode .forgot-password:hover {
     color: #004d7a;
 }
 
+body.light-mode .subjects-list  {
+    background-color: #e8e8e8;
+    border: 2px solid rgba(0, 212, 255, 0.1);
+}
+
 @media (max-width: 768px) {
 
     .settings-container {

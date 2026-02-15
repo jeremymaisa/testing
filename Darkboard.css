@@ -3530,7 +3530,7 @@ body.light-mode .btn-submit {
     cursor: pointer;
     transition: 0.3s;
     border: 1px solid transparent;
-    background: rgba(255, 255, 255, 0.02);
+    background: #a6a6a6;
 }
 
 .subject-list-item:hover {

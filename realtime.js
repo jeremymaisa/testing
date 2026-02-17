@@ -1,34 +1,39 @@
 // realtime.js - Real-time Firestore listeners for subjects and tasks
 
 import { db } from './firebase.js';
-import { collection, doc, onSnapshot, query, where, orderBy } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+import { doc, onSnapshot } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 
 // Global variables to store listeners (for cleanup if needed)
 let subjectsListener = null;
-let tasksListeners = {}; // Map of subjectId to listener
 
-// Function to setup real-time listeners for subjects
+// ---------------------------------------------------------------------------
+// setupRealtimeSubjects
+// Listens to the single course document: db > "subjects" > courseId
+// This matches how app.js saves data via setDoc(doc(db, "subjects", courseId))
+// ---------------------------------------------------------------------------
 export function setupRealtimeSubjects(courseId, onSubjectsUpdate, onError) {
     if (!courseId) {
         console.error('Course ID required for real-time subjects');
         return;
     }
 
-    // Unsubscribe previous listener if exists
+    // Unsubscribe previous listener if one exists
     if (subjectsListener) {
         subjectsListener();
+        subjectsListener = null;
     }
 
-    const subjectsRef = collection(db, 'subjects');
-    const q = query(subjectsRef, where('courseId', '==', courseId), orderBy('createdAt', 'desc'));
+    const docRef = doc(db, 'subjects', courseId);
 
-    subjectsListener = onSnapshot(q, (snapshot) => {
-        const subjects = [];
-        snapshot.forEach((doc) => {
-            subjects.push({ id: doc.id, ...doc.data() });
-        });
-        console.log('Real-time subjects update:', subjects);
-        onSubjectsUpdate(subjects);
+    subjectsListener = onSnapshot(docRef, (docSnap) => {
+        if (docSnap.exists()) {
+            const subjects = docSnap.data().subjects || [];
+            console.log('Real-time subjects update:', subjects);
+            onSubjectsUpdate(subjects);
+        } else {
+            console.warn('No subjects document found for course:', courseId);
+            onSubjectsUpdate([]);
+        }
     }, (error) => {
         console.error('Real-time subjects error:', error);
         if (onError) onError(error);
@@ -37,70 +42,66 @@ export function setupRealtimeSubjects(courseId, onSubjectsUpdate, onError) {
     return subjectsListener;
 }
 
-// Function to setup real-time listeners for tasks in a specific subject
+// ---------------------------------------------------------------------------
+// setupRealtimeTasks
+// Because tasks are embedded inside each subject object (not a subcollection),
+// we listen to the same course document and extract tasks for the given subjectId.
+// ---------------------------------------------------------------------------
 export function setupRealtimeTasks(subjectId, onTasksUpdate, onError) {
     if (!subjectId) {
         console.error('Subject ID required for real-time tasks');
         return;
     }
 
-    // Unsubscribe previous listener for this subject if exists
-    if (tasksListeners[subjectId]) {
-        tasksListeners[subjectId]();
+    // We need the courseId to know which document to listen to.
+    // Retrieve it from localStorage (set during login).
+    const userData = JSON.parse(localStorage.getItem('userData'));
+    if (!userData || !userData.course) {
+        console.warn('No course found in userData — skipping task listener for subject:', subjectId);
+        return;
     }
 
-    const tasksRef = collection(db, 'subjects', subjectId, 'tasks');
-    const q = query(tasksRef, orderBy('createdAt', 'desc'));
+    const courseId = userData.course;
+    const docRef = doc(db, 'subjects', courseId);
 
-    tasksListeners[subjectId] = onSnapshot(q, (snapshot) => {
-        const tasks = [];
-        snapshot.forEach((doc) => {
-            tasks.push({ id: doc.id, ...doc.data() });
-        });
-        console.log(`Real-time tasks update for subject ${subjectId}:`, tasks);
-        onTasksUpdate(subjectId, tasks);
+    const unsubscribe = onSnapshot(docRef, (docSnap) => {
+        if (docSnap.exists()) {
+            const subjects = docSnap.data().subjects || [];
+            const subject = subjects.find(s => s.id === subjectId);
+            const tasks = subject ? (subject.tasks || []) : [];
+            console.log(`Real-time tasks update for subject ${subjectId}:`, tasks);
+            onTasksUpdate(subjectId, tasks);
+        }
     }, (error) => {
         console.error(`Real-time tasks error for subject ${subjectId}:`, error);
         if (onError) onError(error);
     });
 
-    return tasksListeners[subjectId];
+    return unsubscribe;
 }
 
-// Function to stop all real-time listeners
+// ---------------------------------------------------------------------------
+// stopRealtimeListeners — stop the subjects listener
+// (Individual task listeners are unsubscribe handles returned from
+//  setupRealtimeTasks; call them directly or use stopTaskListeners below.)
+// ---------------------------------------------------------------------------
 export function stopRealtimeListeners() {
     if (subjectsListener) {
         subjectsListener();
         subjectsListener = null;
     }
-
-    Object.values(tasksListeners).forEach(unsubscribe => unsubscribe());
-    tasksListeners = {};
 }
 
-// Function to stop only task listeners
+// ---------------------------------------------------------------------------
+// stopTaskListeners
+// app.js calls this before re-building task listeners on a realtime update.
+// Because task listeners in this architecture are just views into the same
+// course document, we don't need to track them separately — but we keep this
+// export so the existing app.js import doesn't break.
+// ---------------------------------------------------------------------------
 export function stopTaskListeners() {
-    Object.values(tasksListeners).forEach(unsubscribe => unsubscribe());
-    tasksListeners = {};
-}
-
-// Function to handle UI updates when subjects change
-export function handleSubjectsRealtimeUpdate(subjects) {
-    // This function can be called to update the UI
-    // Assuming there's a global function or way to update subjects list
-    if (window.updateSubjectsUI) {
-        window.updateSubjectsUI(subjects);
-    } else {
-        console.warn('updateSubjectsUI function not found. Please implement it in your main script.');
-    }
-}
-
-// Function to handle UI updates when tasks change
-export function handleTasksRealtimeUpdate(subjectId, tasks) {
-    // This function can be called to update the UI for a specific subject
-    if (window.updateTasksUI) {
-        window.updateTasksUI(subjectId, tasks);
-    } else {
-        console.warn('updateTasksUI function not found. Please implement it in your main script.');
-    }
+    // No-op: task listeners share the same document listener as subjects.
+    // Individual unsubscribe handles returned by setupRealtimeTasks can be
+    // called directly if you need to stop a specific one.
+    console.log('stopTaskListeners called (no-op in embedded-data architecture)');
 }

@@ -4204,8 +4204,7 @@ body.light-mode .btn-score-task:hover {
 
   .detail-tabs {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-wrap: ;
     gap: 6px;
   }
 }

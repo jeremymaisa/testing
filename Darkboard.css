@@ -3194,6 +3194,12 @@ body.light-mode .subject-list-item:hover {
     border: 2px solid transparent;
 }
 
+body.light-mode .empty-state {
+    background-color: #d1d1d1 !important;
+    border: 2px solid transparent;
+    color: #3b3333;
+}
+
 @media (max-width: 768px) {
 
     .settings-container {

@@ -4206,5 +4206,6 @@ body.light-mode .btn-score-task:hover {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    gap: 6px;
   }
 }

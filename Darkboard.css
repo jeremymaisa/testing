@@ -4201,4 +4201,8 @@ body.light-mode .btn-score-task:hover {
   .task-score i {
     font-size: 0.9em;
   }
+
+  .detail-tabs {
+    gap: 6px;
+  }
 }

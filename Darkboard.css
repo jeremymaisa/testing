@@ -3198,6 +3198,7 @@ body.light-mode .empty-state {
     background-color: #d1d1d1 !important;
     border: 2px solid transparent;
     color: #3b3333;
+    border-radius: 15px;
 }
 
 @media (max-width: 768px) {

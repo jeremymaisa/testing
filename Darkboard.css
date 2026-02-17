@@ -3201,6 +3201,12 @@ body.light-mode .empty-state {
     border-radius: 15px;
 }
 
+body.light-mode .subject-details {
+    background-color: #d1d1d1 !important;
+    border: 2px solid transparent;
+    color: #3b3333;
+}
+
 @media (max-width: 768px) {
 
     .settings-container {

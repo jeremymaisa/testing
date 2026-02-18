@@ -2,44 +2,48 @@
 // IMPORT FIREBASE AUTH & SUPABASE
 // =========================
 import { auth } from './firebase.js';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword, updateProfile } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
-import { getFirestore, doc, setDoc, getDoc, onSnapshot, serverTimestamp, updateDoc, arrayUnion } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+import {
+  signInWithEmailAndPassword,
+  createUserWithEmailAndPassword,
+  updateProfile
+} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
+import {
+  getFirestore,
+  doc,
+  setDoc,
+  getDoc,
+  onSnapshot,
+  serverTimestamp,
+  updateDoc,
+  arrayUnion
+} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
 import { supabase } from './supabase.js';
 import { setupRealtimeTasks, stopTaskListeners } from './realtime.js';
 
 const db = getFirestore();
 
-// Helper: ensure all four content arrays exist on a subject object
-function normalizeSubject(s) {
-  return {
-    ...s,
-    tasks:       Array.isArray(s.tasks)       ? s.tasks       : [],
-    assignments: Array.isArray(s.assignments) ? s.assignments : [],
-    lessons:     Array.isArray(s.lessons)     ? s.lessons     : [],
-    quizzes:     Array.isArray(s.quizzes)     ? s.quizzes     : []
-  };
-}
-
-let subjects = (JSON.parse(localStorage.getItem('subjects')) || [
+let subjects = JSON.parse(localStorage.getItem('subjects')) || [
   {
+    id: '1',
     name: "Mathematics",
     teacher: "Mr. Anderson",
     time: "08:00 AM - 09:30 AM",
     description: "Advanced Calculus and Algebra",
     tasks: [
       {
+        id: 't1',
         title: "Complete Chapter 5 Exercises",
         dueDate: "2023-10-15",
         priority: "high",
         status: "pending",
         description: "Solve all exercises in Chapter 5",
         file: null,
-        fileUrl: null,
-        score: null
+        fileUrl: null
       }
     ],
     assignments: [
       {
+        id: 'a1',
         title: "Research Paper",
         dueDate: "2023-10-20",
         points: 100,
@@ -54,6 +58,7 @@ let subjects = (JSON.parse(localStorage.getItem('subjects')) || [
     quizzes: []
   },
   {
+    id: '2',
     name: "Physics",
     teacher: "Ms. Curie",
     time: "10:00 AM - 11:30 AM",
@@ -64,6 +69,7 @@ let subjects = (JSON.parse(localStorage.getItem('subjects')) || [
     quizzes: []
   },
   {
+    id: '3',
     name: "Computer Science",
     teacher: "Mr. Turing",
     time: "01:00 PM - 02:30 PM",
@@ -73,45 +79,49 @@ let subjects = (JSON.parse(localStorage.getItem('subjects')) || [
     lessons: [],
     quizzes: []
   }
-]).map(normalizeSubject); // normalize on initial load from localStorage
+];
 
-// Function to setup task listeners for all subjects
-function setupTaskListeners() {
-  subjects.forEach((subject, index) => {
-    if (subject.id) {
-      setupRealtimeTasks(subject.id, (subjectId, tasks) => {
-        const localSubject = subjects.find(s => s.id === subjectId);
-        if (localSubject) {
-          localSubject.tasks = tasks;
-          const activeItem = document.querySelector('.subject-list-item.active');
-          if (activeItem && parseInt(activeItem.dataset.index) === index) {
-            renderSubjectDetails(index);
-          }
-        }
-      });
-    }
-  });
+// =========================
+// TOAST NOTIFICATION
+// =========================
+function showToast(message, type = 'success') {
+  const existing = document.querySelector('.darkboard-toast');
+  if (existing) existing.remove();
+
+  const toast = document.createElement('div');
+  toast.className = `darkboard-toast toast-${type}`;
+  toast.innerHTML = `
+    <i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'}"></i>
+    <span>${message}</span>
+  `;
+  document.body.appendChild(toast);
+  requestAnimationFrame(() => toast.classList.add('toast-visible'));
+  setTimeout(() => {
+    toast.classList.remove('toast-visible');
+    setTimeout(() => toast.remove(), 400);
+  }, 3000);
 }
 
-// Upload file to Supabase with enhanced error handling and logging
+// =========================
+// FILE UPLOAD TO SUPABASE
+// =========================
 async function uploadFileToSupabase(file, path) {
   try {
-    console.log('Starting upload to Supabase:', path + file.name);
-    const { data, error } = await supabase.storage.from('files').upload(path + file.name, file, { upsert: true });
-    if (error) {
-      console.error('Supabase upload error:', error);
-      throw new Error(`Upload failed: ${error.message}`);
-    }
-    console.log('Upload successful, getting public URL');
-    const { data: urlData } = supabase.storage.from('files').getPublicUrl(path + file.name);
-    if (!urlData || !urlData.publicUrl) {
-      throw new Error('Failed to get public URL');
-    }
-    console.log('Public URL obtained:', urlData.publicUrl);
+    const { data, error } = await supabase.storage
+      .from('files')
+      .upload(path + file.name, file, { upsert: true });
+
+    if (error) throw new Error(`Upload failed: ${error.message}`);
+
+    const { data: urlData } = supabase.storage
+      .from('files')
+      .getPublicUrl(path + file.name);
+
+    if (!urlData?.publicUrl) throw new Error('Failed to get public URL');
     return urlData.publicUrl;
   } catch (error) {
     console.error('Upload error:', error);
-    alert(`File upload failed: ${error.message}`);
+    showToast(`File upload failed: ${error.message}`, 'error');
     return null;
   }
 }
@@ -122,24 +132,20 @@ async function uploadFileToSupabase(file, path) {
 function initializeTheme() {
   const theme = localStorage.getItem("theme") || "dark";
   applyTheme(theme);
-  const darkBtn = document.getElementById("darkModeBtn") || document.getElementById("darkThemeBtn");
-  const lightBtn = document.getElementById("lightModeBtn") || document.getElementById("lightThemeBtn");
-  if (theme === "dark") {
-    if (darkBtn) darkBtn.classList.add("active");
-    if (lightBtn) lightBtn.classList.remove("active");
-  } else {
-    if (lightBtn) lightBtn.classList.add("active");
-    if (darkBtn) darkBtn.classList.remove("active");
-  }
 }
 
 function applyTheme(theme) {
   if (theme === "light") document.body.classList.add("light-mode");
   else document.body.classList.remove("light-mode");
   localStorage.setItem("theme", theme);
-  [document.getElementById("darkModeBtn"), document.getElementById("lightModeBtn"), document.getElementById("darkThemeBtn"), document.getElementById("lightThemeBtn")].forEach(btn => {
-    if (btn) btn.classList.remove("active");
-  });
+
+  [
+    document.getElementById("darkModeBtn"),
+    document.getElementById("lightModeBtn"),
+    document.getElementById("darkThemeBtn"),
+    document.getElementById("lightThemeBtn")
+  ].forEach(btn => { if (btn) btn.classList.remove("active"); });
+
   if (theme === "dark") {
     document.getElementById("darkModeBtn")?.classList.add("active");
     document.getElementById("darkThemeBtn")?.classList.add("active");
@@ -161,7 +167,7 @@ function setMessage(id, msg, success = false) {
 }
 
 // =========================
-// LOGIN FUNCTIONALITY
+// LOGIN
 // =========================
 function initializeLogin() {
   const loginForm = document.getElementById("loginForm");
@@ -170,26 +176,31 @@ function initializeLogin() {
     const email = document.getElementById("email").value.trim();
     const password = document.getElementById("password").value.trim();
     if (!email || !password) { setMessage("loginError", "Please fill in all fields"); return; }
+
     try {
       const userCredential = await signInWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
+
       let userDoc = await getDoc(doc(db, "users", user.uid));
-      let userRole = 'student';
-      let userCourse = '';
+      let userRole = 'student', userCourse = '';
       if (userDoc.exists()) {
-        const data = userDoc.data();
-        userRole = data.role || 'student';
-        userCourse = data.course || '';
+        userRole = userDoc.data().role || 'student';
+        userCourse = userDoc.data().course || '';
       } else {
         userDoc = await getDoc(doc(db, "students", user.uid));
         if (userDoc.exists()) {
-          const data = userDoc.data();
-          userRole = data.role || 'student';
-          userCourse = data.course || '';
+          userRole = userDoc.data().role || 'student';
+          userCourse = userDoc.data().course || '';
         }
       }
+
       localStorage.setItem("isLoggedIn", "true");
-      localStorage.setItem("userData", JSON.stringify({ id: user.uid, name: user.displayName || email, role: userRole, course: userCourse }));
+      localStorage.setItem("userData", JSON.stringify({
+        id: user.uid,
+        name: user.displayName || email,
+        role: userRole,
+        course: userCourse
+      }));
       setMessage("loginSuccess", "Login successful! Redirecting...", true);
       setTimeout(() => location.href = "index.html", 1200);
     } catch (err) {
@@ -199,7 +210,7 @@ function initializeLogin() {
 }
 
 // =========================
-// SIGNUP FUNCTIONALITY
+// SIGNUP
 // =========================
 function initializeSignup() {
   const signupForm = document.getElementById("signupForm");
@@ -213,15 +224,27 @@ function initializeSignup() {
     const course = document.getElementById("course").value.trim();
     const role = document.querySelector('input[name="role"]:checked').value;
     const accessCode = document.getElementById("accessCode").value.trim();
-    if (!fullName || !email || !password || !confirmPassword || !course) { setMessage("signupMessage", "Please fill in all required fields"); return; }
-    if (password !== confirmPassword) { setMessage("signupMessage", "Passwords do not match"); return; }
-    if (password.length < 6) { setMessage("signupMessage", "Password must be at least 6 characters"); return; }
-    if (role === "instructor" && accessCode !== "INSTRUCTOR2026") { setMessage("signupMessage", "Invalid access code for Instructor"); return; }
+
+    if (!fullName || !email || !password || !confirmPassword || !course) {
+      setMessage("signupMessage", "Please fill in all required fields"); return;
+    }
+    if (password !== confirmPassword) {
+      setMessage("signupMessage", "Passwords do not match"); return;
+    }
+    if (password.length < 6) {
+      setMessage("signupMessage", "Password must be at least 6 characters"); return;
+    }
+    if (role === "instructor" && accessCode !== "INSTRUCTOR2026") {
+      setMessage("signupMessage", "Invalid access code for Instructor"); return;
+    }
+
     try {
       const userCredential = await createUserWithEmailAndPassword(auth, email, password);
       const user = userCredential.user;
       await updateProfile(user, { displayName: fullName });
-      await setDoc(doc(db, "users", user.uid), { fullName, email, phone, course, role, createdAt: serverTimestamp() });
+      await setDoc(doc(db, "users", user.uid), {
+        fullName, email, phone, course, role, createdAt: serverTimestamp()
+      });
       setMessage("signupMessage", "Account created successfully! Redirecting...", true);
       setTimeout(() => window.location.href = "Login.html", 1500);
     } catch (err) {
@@ -231,14 +254,16 @@ function initializeSignup() {
 }
 
 // =========================
-// ROLE TOGGLE FUNCTIONALITY
+// ROLE TOGGLE
 // =========================
 function initializeRoleToggle() {
   const roleRadios = document.querySelectorAll('input[name="role"]');
   const accessCodeGroup = document.getElementById('accessCodeGroup');
   roleRadios.forEach(radio => {
     radio.addEventListener('change', () => {
-      if (accessCodeGroup) accessCodeGroup.style.display = radio.value === 'instructor' ? 'block' : 'none';
+      if (accessCodeGroup) {
+        accessCodeGroup.style.display = radio.value === 'instructor' ? 'block' : 'none';
+      }
     });
   });
 }
@@ -287,7 +312,7 @@ function logout(e) {
 }
 
 // =========================
-// HELP PAGE FUNCTIONALITY
+// HELP PAGE
 // =========================
 function initializeHelp() {
   const faqItems = document.querySelectorAll('.faq-item');
@@ -296,23 +321,28 @@ function initializeHelp() {
     if (!question) return;
     question.addEventListener('click', () => {
       const isActive = item.classList.contains('active');
-      faqItems.forEach(otherItem => otherItem.classList.remove('active'));
+      faqItems.forEach(i => i.classList.remove('active'));
       if (!isActive) item.classList.add('active');
     });
   });
+
   const contactForm = document.getElementById('helpContactForm');
-  contactForm?.addEventListener('submit', (e) => {
+  contactForm?.addEventListener('submit', e => {
     e.preventDefault();
     const btn = contactForm.querySelector('.btn-submit');
     const originalText = btn.textContent;
     btn.textContent = 'Message Sent!';
     btn.style.background = '#4ade80';
-    setTimeout(() => { btn.textContent = originalText; btn.style.background = ''; contactForm.reset(); }, 3000);
+    setTimeout(() => {
+      btn.textContent = originalText;
+      btn.style.background = '';
+      contactForm.reset();
+    }, 3000);
   });
 }
 
 // =========================
-// SUBJECTS PAGE FUNCTIONALITY
+// SUBJECTS PAGE
 // =========================
 function initializeSubjects() {
   const listContainer = document.getElementById('subjectsList');
@@ -326,14 +356,15 @@ function initializeSubjects() {
 
   if (!listContainer || !detailsContainer) return;
 
-  let userData = JSON.parse(localStorage.getItem("userData"));
+  const userData = JSON.parse(localStorage.getItem("userData"));
   const userRole = userData ? userData.role : 'student';
-  console.log('User role:', userRole);
 
-  if (userRole !== 'instructor') {
-    if (addBtn) addBtn.style.display = 'none';
-  }
+  // Hide add button for students
+  if (userRole !== 'instructor' && addBtn) addBtn.style.display = 'none';
 
+  // -------------------------
+  // TASK LISTENERS
+  // -------------------------
   function setupTaskListeners() {
     subjects.forEach((subject, index) => {
       if (subject.id) {
@@ -351,31 +382,33 @@ function initializeSubjects() {
     });
   }
 
-  if (userData && userData.course) {
+  // Load from Firestore if logged in
+  if (userData?.course) {
     loadSubjectsFromFirestore(userData.course).then(() => {
-      setupRealtimeSubjects(userData.course, (updatedSubjects) => {
+      setupRealtimeSubjects(userData.course, updatedSubjects => {
         stopTaskListeners();
-        // FIX 3: normalize on every realtime update
-        subjects = updatedSubjects.map(normalizeSubject);
+        subjects = updatedSubjects;
         saveSubjects(false);
         renderSubjects();
         const activeItem = document.querySelector('.subject-list-item.active');
         if (activeItem) renderSubjectDetails(activeItem.dataset.index);
         setupTaskListeners();
-        console.log("Realtime update: Subjects refreshed from cloud.");
       });
       setupTaskListeners();
     });
   }
 
   // -------------------------
-  // RENDER SUBJECTS
+  // RENDER SUBJECTS LIST
   // -------------------------
   function renderSubjects() {
-    listContainer.innerHTML = subjects.map((sub, index) => `<div class="subject-list-item" data-index="${index}">
-        <div class="subject-name">${sub.name}</div>
-        <div class="subject-teacher">${sub.teacher}</div>
-      </div>`).join('');
+    listContainer.innerHTML = subjects.map((sub, index) => `
+      <div class="subject-list-item" data-index="${index}">
+        <h4>${sub.name}</h4>
+        <p>${sub.teacher}</p>
+      </div>
+    `).join('');
+
     document.querySelectorAll('.subject-list-item').forEach(item => {
       item.addEventListener('click', () => {
         document.querySelectorAll('.subject-list-item').forEach(i => i.classList.remove('active'));
@@ -386,135 +419,198 @@ function initializeSubjects() {
   }
 
   // -------------------------
-  // RENDER DETAILS
+  // RENDER SUBJECT DETAILS
   // -------------------------
   function renderSubjectDetails(index) {
     const sub = subjects[index];
     if (!sub) return;
-
-    // FIX 1: guard all four arrays right at the top of render
-    sub.tasks       = Array.isArray(sub.tasks)       ? sub.tasks       : [];
-    sub.assignments = Array.isArray(sub.assignments) ? sub.assignments : [];
-    sub.lessons     = Array.isArray(sub.lessons)     ? sub.lessons     : [];
-    sub.quizzes     = Array.isArray(sub.quizzes)     ? sub.quizzes     : [];
-
     const isInstructor = userRole === 'instructor';
 
-    detailsContainer.innerHTML = `<div class="detail-header">
-        <div class="detail-title">${sub.name}</div>
-        <div class="detail-meta"><i class="fas fa-user-tie"></i> ${sub.teacher} <i class="fas fa-clock"></i> ${sub.time}</div>
+    detailsContainer.innerHTML = `
+      <div class="detail-header">
+        <h2>${sub.name}</h2>
+        <div class="detail-meta">
+          <span><i class="fas fa-chalkboard-teacher"></i> ${sub.teacher}</span>
+          <span><i class="fas fa-clock"></i> ${sub.time}</span>
+        </div>
         <p class="detail-description">${sub.description || "No description available."}</p>
-        ${isInstructor ? `<div class="detail-actions">
-          <button class="btn-edit-subject" data-index="${index}"><i class="fas fa-edit"></i> Edit</button>
-          <button class="btn-sync-cloud"><i class="fas fa-cloud-upload-alt"></i> Sync to Cloud</button>
-        </div>` : ''}
+        ${isInstructor ? `
+          <div class="detail-actions">
+            <button class="btn-edit-subject" data-index="${index}">
+              <i class="fas fa-edit"></i> Edit
+            </button>
+            <button class="btn-sync-cloud">
+              <i class="fas fa-cloud-upload-alt"></i> Sync to Cloud
+            </button>
+          </div>
+        ` : ''}
       </div>
 
-      <div class="detail-tabs">
+      <div class="subject-tabs">
         <button class="tab-btn active" data-tab="tasks"><i class="fas fa-tasks"></i> Tasks</button>
         <button class="tab-btn" data-tab="assignments"><i class="fas fa-clipboard-list"></i> Assignments</button>
         <button class="tab-btn" data-tab="lessons"><i class="fas fa-book-open"></i> Lessons</button>
         <button class="tab-btn" data-tab="quizzes"><i class="fas fa-question-circle"></i> Quizzes</button>
       </div>
 
-      <div class="detail-content">
-        <div id="tasks-tab" class="tab-content active">
-          <div class="tab-header">
+      <!-- TASKS TAB -->
+      <div class="tab-content active" id="tasks-tab">
+        <div class="items-container">
+          <div class="items-header">
             <h3><i class="fas fa-tasks"></i> Tasks</h3>
             ${isInstructor ? `<button class="btn-add-item" data-type="task" data-subject-index="${index}"><i class="fas fa-plus"></i> Add Task</button>` : ''}
           </div>
           <div class="items-list">
-            ${sub.tasks.length > 0 ? sub.tasks.map((task, i) => `<div class="item-card">
-                <div class="item-info">
-                  <h4>${task.title}</h4>
-                  <p class="item-meta">
-                    Due: ${task.dueDate} | Priority: ${task.priority} | Status: ${task.status}
-                    ${task.score !== undefined && task.score !== null ? `<span class="task-score"><i class="fas fa-star"></i> Score: <strong>${task.score}/100</strong></span>` : ''}
-                  </p>
-                  <p>${task.description}</p>
-                  ${task.file ? `<div class="file-attachment"><i class="fas fa-paperclip"></i> <a href="${task.fileUrl}" target="_blank">${task.file}</a></div>` : ''}
+            ${sub.tasks.length === 0
+              ? '<p style="color:var(--text-secondary);padding:20px;text-align:center;">No tasks yet.</p>'
+              : sub.tasks.map((task, i) => `
+                <div class="item-card">
+                  <div class="item-info">
+                    <h4>${task.title}</h4>
+                    <p><i class="fas fa-calendar"></i> Due: ${task.dueDate} &nbsp;|&nbsp; <i class="fas fa-flag"></i> Priority: ${task.priority} &nbsp;|&nbsp; <i class="fas fa-circle"></i> Status: ${task.status}</p>
+                    <p>${task.description || ''}</p>
+                    ${task.fileUrl ? `<p><a href="${task.fileUrl}" target="_blank" style="color:var(--accent);"><i class="fas fa-paperclip"></i> ${task.file}</a></p>` : ''}
+                  </div>
+                  ${isInstructor ? `
+                    <div class="item-actions">
+                      <button class="btn-edit-item" data-type="task" data-item-index="${i}" data-subject-index="${index}"><i class="fas fa-edit"></i></button>
+                      <button class="btn-delete-item" data-type="task" data-item-index="${i}" data-subject-index="${index}"><i class="fas fa-trash"></i></button>
+                    </div>
+                  ` : ''}
                 </div>
-                ${isInstructor ? `<div class="item-actions">
-                  <button class="btn-edit-item" data-type="task" data-item-index="${i}" data-subject-index="${index}"><i class="fas fa-edit"></i></button>
-                  <button class="btn-delete-item" data-type="task" data-item-index="${i}" data-subject-index="${index}"><i class="fas fa-trash"></i></button>
-                  <button class="btn-score-task" data-task-index="${i}" data-subject-index="${index}"><i class="fas fa-award"></i> Score</button>
-                </div>` : ''}
-              </div>`).join('') : '<div class="empty-message"><i class="fas fa-inbox"></i><p>No tasks available yet.</p></div>'}
+              `).join('')
+            }
           </div>
         </div>
+      </div>
 
-        <div id="assignments-tab" class="tab-content">
-          <div class="tab-header">
+      <!-- ASSIGNMENTS TAB -->
+      <div class="tab-content" id="assignments-tab">
+        <div class="items-container">
+          <div class="items-header">
             <h3><i class="fas fa-clipboard-list"></i> Assignments</h3>
             ${isInstructor ? `<button class="btn-add-item" data-type="assignment" data-subject-index="${index}"><i class="fas fa-plus"></i> Add Assignment</button>` : ''}
           </div>
           <div class="items-list">
-            ${sub.assignments.length > 0 ? sub.assignments.map((assignment, i) => `<div class="item-card">
-                <div class="item-info">
-                  <h4>${assignment.title}</h4>
-                  <p class="item-meta">
-                    Due: ${assignment.dueDate} | Points: ${assignment.points} | Status: ${assignment.status}
-                    ${assignment.score !== undefined && assignment.score !== null ? `<span class="task-score"><i class="fas fa-star"></i> Score: <strong>${assignment.score}/100</strong></span>` : ''}
-                  </p>
-                  <p>${assignment.instructions}</p>
-                  ${assignment.file ? `<div class="file-attachment"><i class="fas fa-paperclip"></i> <a href="${assignment.fileUrl}" target="_blank">${assignment.file}</a></div>` : ''}
-                </div>
-                ${!isInstructor ? `<div class="item-actions">
-                  <button class="btn-submit-assignment" data-assignment-index="${i}" data-subject-index="${index}"><i class="fas fa-upload"></i> Submit Assignment</button>
-                  ${assignment.submissions && assignment.submissions.find(s => s.studentId === userData.id) ? '<span class="submitted-badge"><i class="fas fa-check-circle"></i> Submitted</span>' : ''}
-                </div>` : `<div class="item-actions">
-                  <button class="btn-view-submissions" data-assignment-index="${i}" data-subject-index="${index}"><i class="fas fa-eye"></i> View Submissions (${assignment.submissions ? assignment.submissions.length : 0})</button>
-                  <button class="btn-edit-item" data-type="assignment" data-item-index="${i}" data-subject-index="${index}"><i class="fas fa-edit"></i></button>
-                  <button class="btn-delete-item" data-type="assignment" data-item-index="${i}" data-subject-index="${index}"><i class="fas fa-trash"></i></button>
-                  <button class="btn-score-task" data-assignment-index="${i}" data-subject-index="${index}"><i class="fas fa-award"></i> Score</button>
-                </div>`}
-              </div>`).join('') : '<div class="empty-message"><i class="fas fa-inbox"></i><p>No assignments available yet.</p></div>'}
+            ${sub.assignments.length === 0
+              ? '<p style="color:var(--text-secondary);padding:20px;text-align:center;">No assignments yet.</p>'
+              : sub.assignments.map((assignment, i) => {
+                  const mySubmission = assignment.submissions?.find(s => s.studentId === userData?.id);
+                  return `
+                    <div class="item-card">
+                      <div class="item-info">
+                        <h4>${assignment.title}</h4>
+                        <p><i class="fas fa-calendar"></i> Due: ${assignment.dueDate} &nbsp;|&nbsp; <i class="fas fa-star"></i> Points: ${assignment.points} &nbsp;|&nbsp; <i class="fas fa-circle"></i> Status: ${assignment.status}</p>
+                        <p>${assignment.instructions || ''}</p>
+                        ${assignment.fileUrl ? `<p><a href="${assignment.fileUrl}" target="_blank" style="color:var(--accent);"><i class="fas fa-paperclip"></i> ${assignment.file}</a></p>` : ''}
+                        ${!isInstructor ? `
+                          ${mySubmission ? `
+                            <span class="assignment-submitted-badge ${mySubmission.score !== undefined ? 'scored' : ''}">
+                              ${mySubmission.score !== undefined
+                                ? `<i class="fas fa-trophy"></i> Score: ${mySubmission.score} / ${assignment.points}`
+                                : `<i class="fas fa-check"></i> Submitted — Awaiting score`}
+                            </span>
+                          ` : ''}
+                        ` : `
+                          <span style="color:var(--text-secondary);font-size:0.88em;">
+                            <i class="fas fa-users"></i> ${assignment.submissions?.length || 0} submission(s)
+                          </span>
+                        `}
+                      </div>
+                      <div class="item-actions">
+                        ${!isInstructor ? `
+                          <button class="btn-submit-assignment btn-edit-item" data-assignment-index="${i}" data-subject-index="${index}">
+                            <i class="fas fa-paper-plane"></i> ${mySubmission ? 'Re-submit' : 'Submit'}
+                          </button>
+                        ` : `
+                          <button class="btn-view-submissions btn-edit-item" data-assignment-index="${i}" data-subject-index="${index}">
+                            <i class="fas fa-inbox"></i> Submissions (${assignment.submissions?.length || 0})
+                          </button>
+                          <button class="btn-edit-item" data-type="assignment" data-item-index="${i}" data-subject-index="${index}"><i class="fas fa-edit"></i></button>
+                          <button class="btn-delete-item" data-type="assignment" data-item-index="${i}" data-subject-index="${index}"><i class="fas fa-trash"></i></button>
+                        `}
+                      </div>
+                    </div>
+                  `;
+                }).join('')
+            }
           </div>
         </div>
+      </div>
 
-        <div id="lessons-tab" class="tab-content">
-          <div class="tab-header">
+      <!-- LESSONS TAB -->
+      <div class="tab-content" id="lessons-tab">
+        <div class="items-container">
+          <div class="items-header">
             <h3><i class="fas fa-book-open"></i> Lessons</h3>
             ${isInstructor ? `<button class="btn-add-item" data-type="lesson" data-subject-index="${index}"><i class="fas fa-plus"></i> Add Lesson</button>` : ''}
           </div>
           <div class="items-list">
-            ${sub.lessons.length > 0 ? sub.lessons.map((lesson, i) => `<div class="item-card">
-                <h4>${lesson.title}</h4>
-                <p class="item-meta">${lesson.duration} • ${lesson.status}</p>
-                <p>${lesson.content}</p>
-                ${lesson.file ? `<div class="file-attachment"><i class="fas fa-paperclip"></i> <a href="${lesson.fileUrl}" target="_blank">${lesson.file}</a></div>` : ''}
-                ${isInstructor ? `<div class="item-actions">
-                  <button class="btn-edit-item" data-type="lesson" data-item-index="${i}" data-subject-index="${index}"><i class="fas fa-edit"></i></button>
-                  <button class="btn-delete-item" data-type="lesson" data-item-index="${i}" data-subject-index="${index}"><i class="fas fa-trash"></i></button>
-                </div>` : ''}
-              </div>`).join('') : '<div class="empty-message"><i class="fas fa-inbox"></i><p>No lessons available yet.</p></div>'}
+            ${sub.lessons.length === 0
+              ? '<p style="color:var(--text-secondary);padding:20px;text-align:center;">No lessons yet.</p>'
+              : sub.lessons.map((lesson, i) => `
+                <div class="item-card">
+                  <div class="item-info">
+                    <h4>${lesson.title}</h4>
+                    <p><i class="fas fa-hourglass-half"></i> ${lesson.duration} &nbsp;•&nbsp; <i class="fas fa-circle"></i> ${lesson.status}</p>
+                    <p>${lesson.content || ''}</p>
+                    ${lesson.fileUrl ? `<p><a href="${lesson.fileUrl}" target="_blank" style="color:var(--accent);"><i class="fas fa-paperclip"></i> ${lesson.file}</a></p>` : ''}
+                  </div>
+                  ${isInstructor ? `
+                    <div class="item-actions">
+                      <button class="btn-edit-item" data-type="lesson" data-item-index="${i}" data-subject-index="${index}"><i class="fas fa-edit"></i></button>
+                      <button class="btn-delete-item" data-type="lesson" data-item-index="${i}" data-subject-index="${index}"><i class="fas fa-trash"></i></button>
+                    </div>
+                  ` : ''}
+                </div>
+              `).join('')
+            }
           </div>
         </div>
+      </div>
 
-        <div id="quizzes-tab" class="tab-content">
-          <div class="tab-header">
+      <!-- QUIZZES TAB -->
+      <div class="tab-content" id="quizzes-tab">
+        <div class="items-container">
+          <div class="items-header">
             <h3><i class="fas fa-question-circle"></i> Quizzes</h3>
             ${isInstructor ? `<button class="btn-add-item" data-type="quiz" data-subject-index="${index}"><i class="fas fa-plus"></i> Add Quiz</button>` : ''}
           </div>
           <div class="items-list">
-            ${sub.quizzes.length > 0 ? sub.quizzes.map((quiz, i) => `<div class="item-card">
-                <h4>${quiz.title}</h4>
-                <p class="item-meta">Due: ${quiz.dueDate} | Points: ${quiz.points} | Status: ${quiz.status}</p>
-                <p>${quiz.instructions}</p>
-                ${isInstructor ? `<div class="item-actions">
-                  <button class="btn-edit-item" data-type="quiz" data-item-index="${i}" data-subject-index="${index}"><i class="fas fa-edit"></i></button>
-                  <button class="btn-delete-item" data-type="quiz" data-item-index="${i}" data-subject-index="${index}"><i class="fas fa-trash"></i></button>
-                </div>` : ''}
-              </div>`).join('') : '<div class="empty-message"><i class="fas fa-inbox"></i><p>No quizzes available yet.</p></div>'}
+            ${sub.quizzes.length === 0
+              ? '<p style="color:var(--text-secondary);padding:20px;text-align:center;">No quizzes yet.</p>'
+              : sub.quizzes.map((quiz, i) => `
+                <div class="item-card">
+                  <div class="item-info">
+                    <h4>${quiz.title}</h4>
+                    <p><i class="fas fa-calendar"></i> Due: ${quiz.dueDate} &nbsp;|&nbsp; <i class="fas fa-star"></i> Points: ${quiz.points} &nbsp;|&nbsp; Status: ${quiz.status}</p>
+                    <p>${quiz.instructions || ''}</p>
+                  </div>
+                  ${isInstructor ? `
+                    <div class="item-actions">
+                      <button class="btn-edit-item" data-type="quiz" data-item-index="${i}" data-subject-index="${index}"><i class="fas fa-edit"></i></button>
+                      <button class="btn-delete-item" data-type="quiz" data-item-index="${i}" data-subject-index="${index}"><i class="fas fa-trash"></i></button>
+                    </div>
+                  ` : ''}
+                </div>
+              `).join('')
+            }
           </div>
         </div>
-      </div>`;
+      </div>
+    `;
 
-    document.querySelector('.btn-edit-subject')?.addEventListener('click', (e) => {
-      e.stopPropagation();
-      openEditModal(e.target.closest('.btn-edit-subject').dataset.index);
+    // Edit subject button
+    document.querySelector('.btn-edit-subject')?.addEventListener('click', e => {
+      openEditModal(e.currentTarget.dataset.index);
     });
 
+    // Sync button
+    document.querySelector('.btn-sync-cloud')?.addEventListener('click', async () => {
+      await saveAndNotify('Synced to cloud!');
+    });
+
+    // Tab switching
     document.querySelectorAll('.tab-btn').forEach(btn => {
       btn.addEventListener('click', () => {
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
@@ -524,125 +620,37 @@ function initializeSubjects() {
       });
     });
 
+    // Add item buttons
     document.querySelectorAll('.btn-add-item').forEach(btn => {
       btn.addEventListener('click', () => openAddItemModal(parseInt(btn.dataset.subjectIndex), btn.dataset.type));
     });
 
-    document.querySelectorAll('.btn-edit-item').forEach(btn => {
+    // Edit item buttons
+    document.querySelectorAll('.btn-edit-item[data-type]').forEach(btn => {
       btn.addEventListener('click', () => openEditItemModal(parseInt(btn.dataset.subjectIndex), btn.dataset.type, parseInt(btn.dataset.itemIndex)));
     });
 
+    // Delete item buttons
     document.querySelectorAll('.btn-delete-item').forEach(btn => {
       btn.addEventListener('click', () => deleteItem(parseInt(btn.dataset.subjectIndex), btn.dataset.type, parseInt(btn.dataset.itemIndex)));
     });
 
+    // Submit assignment (student)
     document.querySelectorAll('.btn-submit-assignment').forEach(btn => {
       btn.addEventListener('click', () => openSubmitAssignmentModal(parseInt(btn.dataset.subjectIndex), parseInt(btn.dataset.assignmentIndex)));
     });
 
+    // View submissions (instructor)
     document.querySelectorAll('.btn-view-submissions').forEach(btn => {
       btn.addEventListener('click', () => viewSubmissions(parseInt(btn.dataset.subjectIndex), parseInt(btn.dataset.assignmentIndex)));
     });
-
-    document.querySelectorAll('.btn-sync-cloud').forEach(btn => {
-      btn.addEventListener('click', () => { saveSubjects(false); saveSubjectsToFirestore(); });
-    });
-
-    document.querySelectorAll('.btn-score-task').forEach(btn => {
-      btn.addEventListener('click', () => {
-        if (btn.dataset.taskIndex !== undefined) {
-          openScoreTaskModal(parseInt(btn.dataset.subjectIndex), parseInt(btn.dataset.taskIndex));
-        } else if (btn.dataset.assignmentIndex !== undefined) {
-          openScoreAssignmentModal(parseInt(btn.dataset.subjectIndex), parseInt(btn.dataset.assignmentIndex));
-        }
-      });
-    });
   }
 
   // -------------------------
-  // SCORE TASK MODAL
+  // MODAL HELPERS
   // -------------------------
-  function openScoreTaskModal(subjectIndex, taskIndex) {
-    const sub = subjects[subjectIndex];
-    if (!sub) return;
-    const task = sub.tasks[taskIndex];
-    if (!task) return;
-    const modal = document.createElement('div');
-    modal.className = 'modal';
-    modal.id = 'scoreTaskModal';
-    modal.innerHTML = `<div class="modal-content"><span class="close">&times;</span><div class="modal-body">
-        <h2><i class="fas fa-award"></i> Score Task: ${task.title}</h2>
-        <form id="scoreTaskForm">
-          <div class="form-group"><label>Score (0-100)</label><input type="number" id="taskScore" min="0" max="100" value="${task.score || 0}" required /></div>
-          <div class="form-group"><label>Feedback (Optional)</label><textarea id="taskFeedback" rows="3">${task.feedback || ''}</textarea></div>
-          <button type="submit" class="btn-add-subject"><i class="fas fa-check"></i> Save Score</button>
-        </form>
-      </div></div>`;
-    document.body.appendChild(modal);
-    modal.style.display = 'block';
-    modal.querySelector('.close').addEventListener('click', () => modal.remove());
-    modal.querySelector('#scoreTaskForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const score = parseInt(document.getElementById('taskScore').value);
-      const feedback = document.getElementById('taskFeedback').value.trim();
-      if (score < 0 || score > 100) { alert('Score must be between 0 and 100'); return; }
-      sub.tasks[taskIndex].score = score;
-      sub.tasks[taskIndex].feedback = feedback;
-      sub.tasks[taskIndex].scoredAt = new Date().toISOString();
-      await saveSubjects();
-      await saveSubjectsToFirestore();
-      renderSubjectDetails(subjectIndex);
-      alert('Score saved successfully');
-      modal.remove();
-    });
-  }
+  addBtn?.addEventListener('click', () => { addModal.style.display = 'block'; });
 
-  // -------------------------
-  // SCORE ASSIGNMENT MODAL
-  // -------------------------
-  function openScoreAssignmentModal(subjectIndex, assignmentIndex) {
-    const sub = subjects[subjectIndex];
-    if (!sub) return;
-    const assignment = sub.assignments[assignmentIndex];
-    if (!assignment) return;
-    const modal = document.createElement('div');
-    modal.className = 'modal';
-    modal.id = 'scoreAssignmentModal';
-    modal.innerHTML = `<div class="modal-content"><span class="close">&times;</span><div class="modal-body">
-        <h2><i class="fas fa-award"></i> Score Assignment: ${assignment.title}</h2>
-        <form id="scoreAssignmentForm">
-          <div class="form-group"><label>Score (0-100)</label><input type="number" id="assignmentScore" min="0" max="100" value="${assignment.score || 0}" required /></div>
-          <div class="form-group"><label>Feedback (Optional)</label><textarea id="assignmentFeedback" rows="3">${assignment.feedback || ''}</textarea></div>
-          <button type="submit" class="btn-add-subject"><i class="fas fa-check"></i> Save Score</button>
-        </form>
-      </div></div>`;
-    document.body.appendChild(modal);
-    modal.style.display = 'block';
-    modal.querySelector('.close').addEventListener('click', () => modal.remove());
-    modal.querySelector('#scoreAssignmentForm').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const score = parseInt(document.getElementById('assignmentScore').value);
-      const feedback = document.getElementById('assignmentFeedback').value.trim();
-      if (score < 0 || score > 100) { alert('Score must be between 0 and 100'); return; }
-      sub.assignments[assignmentIndex].score = score;
-      sub.assignments[assignmentIndex].feedback = feedback;
-      sub.assignments[assignmentIndex].scoredAt = new Date().toISOString();
-      await saveSubjects();
-      await saveSubjectsToFirestore();
-      renderSubjectDetails(subjectIndex);
-      alert('Score saved successfully');
-      modal.remove();
-    });
-  }
-
-  // -------------------------
-  // ADD MODAL
-  // -------------------------
-  addBtn?.addEventListener('click', () => { if (addModal) addModal.style.display = 'block'; });
-
-  // -------------------------
-  // EDIT MODAL
-  // -------------------------
   function openEditModal(index) {
     const sub = subjects[index];
     if (!sub) return;
@@ -651,15 +659,15 @@ function initializeSubjects() {
     document.getElementById('editTeacherName').value = sub.teacher;
     document.getElementById('editSubjectTime').value = sub.time;
     document.getElementById('editSubjectDescription').value = sub.description || '';
-    if (editModal) editModal.style.display = 'block';
+    editModal.style.display = 'block';
   }
 
-  // -------------------------
-  // CLOSE MODALS
-  // -------------------------
   function closeAllModals() {
-    document.querySelectorAll('.modal').forEach(modal => modal.style.display = 'none');
+    document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
+    // Also remove any dynamically created modals
+    document.querySelectorAll('#addQuizModal, #editQuizModal, #submitAssignmentModal, #viewSubmissionsModal').forEach(m => m.remove());
   }
+
   document.querySelectorAll('.modal .close').forEach(btn => btn.addEventListener('click', closeAllModals));
   window.addEventListener('click', e => { if (e.target.classList.contains('modal')) closeAllModals(); });
 
@@ -668,67 +676,64 @@ function initializeSubjects() {
   // -------------------------
   addForm?.addEventListener('submit', async e => {
     e.preventDefault();
-    const subject = normalizeSubject({
+    const subject = {
       id: Date.now().toString(),
       name: document.getElementById('newSubjectName').value.trim(),
       teacher: document.getElementById('newTeacherName').value.trim(),
       time: document.getElementById('newSubjectTime').value.trim(),
-      description: document.getElementById('newSubjectDescription').value.trim()
-    });
+      description: document.getElementById('newSubjectDescription').value.trim(),
+      lessons: [], tasks: [], assignments: [], quizzes: []
+    };
     subjects.push(subject);
-    saveSubjects();
     renderSubjects();
-    setupRealtimeTasks(subject.id, (subjectId, tasks) => {
-      const localSubject = subjects.find(s => s.id === subjectId);
-      if (localSubject) {
-        localSubject.tasks = tasks;
-        const activeItem = document.querySelector('.subject-list-item.active');
-        const subjectIndex = subjects.findIndex(s => s.id === subjectId);
-        if (activeItem && parseInt(activeItem.dataset.index) === subjectIndex) renderSubjectDetails(subjectIndex);
-      }
-    });
     addForm.reset();
-    if (addModal) addModal.style.display = 'none';
+    addModal.style.display = 'none';
+    await saveAndNotify('Subject added and saved to cloud!');
   });
 
   // -------------------------
   // EDIT SUBJECT
   // -------------------------
-  editForm?.addEventListener('submit', e => {
+  editForm?.addEventListener('submit', async e => {
     e.preventDefault();
     const index = parseInt(document.getElementById('editSubjectIndex').value);
-    subjects[index] = normalizeSubject({
-      ...subjects[index],
+    const existing = subjects[index];
+    subjects[index] = {
+      ...existing,
       name: document.getElementById('editSubjectName').value.trim(),
       teacher: document.getElementById('editTeacherName').value.trim(),
       time: document.getElementById('editSubjectTime').value.trim(),
       description: document.getElementById('editSubjectDescription').value.trim()
-    });
-    saveSubjects();
+    };
     renderSubjects();
     renderSubjectDetails(index);
     closeAllModals();
+    await saveAndNotify('Subject updated and saved to cloud!');
   });
 
   // -------------------------
   // DELETE SUBJECT
   // -------------------------
-  deleteBtn?.addEventListener('click', () => {
+  deleteBtn?.addEventListener('click', async () => {
     const index = parseInt(document.getElementById('editSubjectIndex').value);
     if (confirm('Are you sure you want to delete this subject?')) {
       subjects.splice(index, 1);
-      saveSubjects();
       renderSubjects();
-      detailsContainer.innerHTML = `<div class="empty-state"><i class="fas fa-book-open"></i><p>Select a subject from the list to view details, tasks, assignments, and lessons.</p></div>`;
+      detailsContainer.innerHTML = `
+        <div class="empty-state">
+          <i class="fas fa-book-open"></i>
+          <p>Select a subject from the list to view details, tasks, assignments, and lessons.</p>
+        </div>
+      `;
       closeAllModals();
+      await saveAndNotify('Subject deleted and synced to cloud.');
     }
   });
 
   // -------------------------
   // ADD TASK
   // -------------------------
-  const addTaskForm = document.getElementById('addTaskForm');
-  addTaskForm?.addEventListener('submit', async e => {
+  document.getElementById('addTaskForm')?.addEventListener('submit', async e => {
     e.preventDefault();
     const subjectIndex = parseInt(document.getElementById('taskSubjectIndex').value);
     const sub = subjects[subjectIndex];
@@ -740,38 +745,34 @@ function initializeSubjects() {
       priority: document.getElementById('newTaskPriority').value,
       status: 'pending',
       description: document.getElementById('newTaskDescription').value.trim(),
-      file: null, fileUrl: null, score: null, feedback: null
+      file: null, fileUrl: null
     };
     const fileInput = document.getElementById('newTaskFile');
-    if (fileInput.files[0]) {
-      const file = fileInput.files[0];
-      task.fileUrl = await uploadFileToSupabase(file, `subjects/${sub.id}/${task.id}/`);
-      task.file = file.name;
+    if (fileInput?.files[0]) {
+      task.fileUrl = await uploadFileToSupabase(fileInput.files[0], `subjects/${sub.id}/${task.id}/`);
+      task.file = fileInput.files[0].name;
     }
     sub.tasks.push(task);
-    saveSubjects();
     renderSubjectDetails(subjectIndex);
-    addTaskForm.reset();
+    document.getElementById('addTaskForm').reset();
     document.getElementById('addTaskModal').style.display = 'none';
+    await saveAndNotify('Task added and saved to cloud!');
   });
 
   // -------------------------
   // EDIT TASK
   // -------------------------
-  const editTaskForm = document.getElementById('editTaskForm');
-  editTaskForm?.addEventListener('submit', async e => {
+  document.getElementById('editTaskForm')?.addEventListener('submit', async e => {
     e.preventDefault();
     const itemIndex = parseInt(document.getElementById('editTaskIndex').value);
     const subjectIndex = parseInt(document.getElementById('editTaskSubjectIndex').value);
     const sub = subjects[subjectIndex];
-    if (!sub || !sub.tasks[itemIndex]) return;
+    if (!sub?.tasks[itemIndex]) return;
     const fileInput = document.getElementById('editTaskFile');
-    let fileName = sub.tasks[itemIndex].file;
-    let fileUrl = sub.tasks[itemIndex].fileUrl;
-    if (fileInput.files[0]) {
-      const file = fileInput.files[0];
-      fileName = file.name;
-      fileUrl = await uploadFileToSupabase(file, `subjects/${sub.id}/${sub.tasks[itemIndex].id}/`);
+    let { file: fileName, fileUrl } = sub.tasks[itemIndex];
+    if (fileInput?.files[0]) {
+      fileUrl = await uploadFileToSupabase(fileInput.files[0], `subjects/${sub.id}/${sub.tasks[itemIndex].id}/`);
+      fileName = fileInput.files[0].name;
     }
     sub.tasks[itemIndex] = {
       ...sub.tasks[itemIndex],
@@ -780,22 +781,25 @@ function initializeSubjects() {
       priority: document.getElementById('editTaskPriority').value,
       status: document.getElementById('editTaskStatus').value,
       description: document.getElementById('editTaskDescription').value.trim(),
-      file: fileName, fileUrl: fileUrl
+      file: fileName, fileUrl
     };
-    saveSubjects();
     renderSubjectDetails(subjectIndex);
     closeAllModals();
+    await saveAndNotify('Task updated and saved to cloud!');
   });
 
   document.getElementById('deleteTaskBtn')?.addEventListener('click', () => {
-    deleteItem(parseInt(document.getElementById('editTaskSubjectIndex').value), 'task', parseInt(document.getElementById('editTaskIndex').value));
+    deleteItem(
+      parseInt(document.getElementById('editTaskSubjectIndex').value),
+      'task',
+      parseInt(document.getElementById('editTaskIndex').value)
+    );
   });
 
   // -------------------------
   // ADD ASSIGNMENT
   // -------------------------
-  const addAssignmentForm = document.getElementById('addAssignmentForm');
-  addAssignmentForm?.addEventListener('submit', async e => {
+  document.getElementById('addAssignmentForm')?.addEventListener('submit', async e => {
     e.preventDefault();
     const subjectIndex = parseInt(document.getElementById('assignmentSubjectIndex').value);
     const sub = subjects[subjectIndex];
@@ -807,38 +811,34 @@ function initializeSubjects() {
       points: parseInt(document.getElementById('newAssignmentPoints').value),
       status: document.getElementById('newAssignmentStatus').value,
       instructions: document.getElementById('newAssignmentInstructions').value.trim(),
-      file: null, fileUrl: null, submissions: [], score: null, feedback: null
+      file: null, fileUrl: null, submissions: []
     };
     const fileInput = document.getElementById('newAssignmentFile');
-    if (fileInput.files[0]) {
-      const file = fileInput.files[0];
-      assignment.fileUrl = await uploadFileToSupabase(file, `subjects/${sub.id}/${assignment.id}/`);
-      assignment.file = file.name;
+    if (fileInput?.files[0]) {
+      assignment.fileUrl = await uploadFileToSupabase(fileInput.files[0], `subjects/${sub.id}/${assignment.id}/`);
+      assignment.file = fileInput.files[0].name;
     }
     sub.assignments.push(assignment);
-    saveSubjects();
     renderSubjectDetails(subjectIndex);
-    addAssignmentForm.reset();
+    document.getElementById('addAssignmentForm').reset();
     document.getElementById('addAssignmentModal').style.display = 'none';
+    await saveAndNotify('Assignment added and saved to cloud!');
   });
 
   // -------------------------
   // EDIT ASSIGNMENT
   // -------------------------
-  const editAssignmentForm = document.getElementById('editAssignmentForm');
-  editAssignmentForm?.addEventListener('submit', async e => {
+  document.getElementById('editAssignmentForm')?.addEventListener('submit', async e => {
     e.preventDefault();
     const itemIndex = parseInt(document.getElementById('editAssignmentIndex').value);
     const subjectIndex = parseInt(document.getElementById('editAssignmentSubjectIndex').value);
     const sub = subjects[subjectIndex];
-    if (!sub || !sub.assignments[itemIndex]) return;
+    if (!sub?.assignments[itemIndex]) return;
     const fileInput = document.getElementById('editAssignmentFile');
-    let fileName = sub.assignments[itemIndex].file;
-    let fileUrl = sub.assignments[itemIndex].fileUrl;
-    if (fileInput.files[0]) {
-      const file = fileInput.files[0];
-      fileName = file.name;
-      fileUrl = await uploadFileToSupabase(file, `subjects/${sub.id}/${sub.assignments[itemIndex].id}/`);
+    let { file: fileName, fileUrl } = sub.assignments[itemIndex];
+    if (fileInput?.files[0]) {
+      fileUrl = await uploadFileToSupabase(fileInput.files[0], `subjects/${sub.id}/${sub.assignments[itemIndex].id}/`);
+      fileName = fileInput.files[0].name;
     }
     sub.assignments[itemIndex] = {
       ...sub.assignments[itemIndex],
@@ -847,22 +847,25 @@ function initializeSubjects() {
       points: parseInt(document.getElementById('editAssignmentPoints').value),
       status: document.getElementById('editAssignmentStatus').value,
       instructions: document.getElementById('editAssignmentInstructions').value.trim(),
-      file: fileName, fileUrl: fileUrl
+      file: fileName, fileUrl
     };
-    saveSubjects();
     renderSubjectDetails(subjectIndex);
     closeAllModals();
+    await saveAndNotify('Assignment updated and saved to cloud!');
   });
 
   document.getElementById('deleteAssignmentBtn')?.addEventListener('click', () => {
-    deleteItem(parseInt(document.getElementById('editAssignmentSubjectIndex').value), 'assignment', parseInt(document.getElementById('editAssignmentIndex').value));
+    deleteItem(
+      parseInt(document.getElementById('editAssignmentSubjectIndex').value),
+      'assignment',
+      parseInt(document.getElementById('editAssignmentIndex').value)
+    );
   });
 
   // -------------------------
   // ADD LESSON
   // -------------------------
-  const addLessonForm = document.getElementById('addLessonForm');
-  addLessonForm?.addEventListener('submit', async e => {
+  document.getElementById('addLessonForm')?.addEventListener('submit', async e => {
     e.preventDefault();
     const subjectIndex = parseInt(document.getElementById('lessonSubjectIndex').value);
     const sub = subjects[subjectIndex];
@@ -876,35 +879,31 @@ function initializeSubjects() {
       file: null, fileUrl: null
     };
     const fileInput = document.getElementById('newLessonFile');
-    if (fileInput.files[0]) {
-      const file = fileInput.files[0];
-      lesson.fileUrl = await uploadFileToSupabase(file, `subjects/${sub.id}/${lesson.id}/`);
-      lesson.file = file.name;
+    if (fileInput?.files[0]) {
+      lesson.fileUrl = await uploadFileToSupabase(fileInput.files[0], `subjects/${sub.id}/${lesson.id}/`);
+      lesson.file = fileInput.files[0].name;
     }
     sub.lessons.push(lesson);
-    saveSubjects();
     renderSubjectDetails(subjectIndex);
-    addLessonForm.reset();
+    document.getElementById('addLessonForm').reset();
     document.getElementById('addLessonModal').style.display = 'none';
+    await saveAndNotify('Lesson added and saved to cloud!');
   });
 
   // -------------------------
   // EDIT LESSON
   // -------------------------
-  const editLessonForm = document.getElementById('editLessonForm');
-  editLessonForm?.addEventListener('submit', async e => {
+  document.getElementById('editLessonForm')?.addEventListener('submit', async e => {
     e.preventDefault();
     const itemIndex = parseInt(document.getElementById('editLessonIndex').value);
     const subjectIndex = parseInt(document.getElementById('editLessonSubjectIndex').value);
     const sub = subjects[subjectIndex];
-    if (!sub || !sub.lessons[itemIndex]) return;
+    if (!sub?.lessons[itemIndex]) return;
     const fileInput = document.getElementById('editLessonFile');
-    let fileName = sub.lessons[itemIndex].file;
-    let fileUrl = sub.lessons[itemIndex].fileUrl;
-    if (fileInput.files[0]) {
-      const file = fileInput.files[0];
-      fileName = file.name;
-      fileUrl = await uploadFileToSupabase(file, `subjects/${sub.id}/${sub.lessons[itemIndex].id}/`);
+    let { file: fileName, fileUrl } = sub.lessons[itemIndex];
+    if (fileInput?.files[0]) {
+      fileUrl = await uploadFileToSupabase(fileInput.files[0], `subjects/${sub.id}/${sub.lessons[itemIndex].id}/`);
+      fileName = fileInput.files[0].name;
     }
     sub.lessons[itemIndex] = {
       ...sub.lessons[itemIndex],
@@ -912,15 +911,19 @@ function initializeSubjects() {
       duration: document.getElementById('editLessonDuration').value.trim(),
       status: document.getElementById('editLessonStatus').value,
       content: document.getElementById('editLessonContent').value.trim(),
-      file: fileName, fileUrl: fileUrl
+      file: fileName, fileUrl
     };
-    saveSubjects();
     renderSubjectDetails(subjectIndex);
     closeAllModals();
+    await saveAndNotify('Lesson updated and saved to cloud!');
   });
 
   document.getElementById('deleteLessonBtn')?.addEventListener('click', () => {
-    deleteItem(parseInt(document.getElementById('editLessonSubjectIndex').value), 'lesson', parseInt(document.getElementById('editLessonIndex').value));
+    deleteItem(
+      parseInt(document.getElementById('editLessonSubjectIndex').value),
+      'lesson',
+      parseInt(document.getElementById('editLessonIndex').value)
+    );
   });
 
   // -------------------------
@@ -931,20 +934,38 @@ function initializeSubjects() {
       const modal = document.createElement('div');
       modal.className = 'modal';
       modal.id = 'addQuizModal';
-      modal.innerHTML = `<div class="modal-content"><span class="close">&times;</span><div class="modal-body">
-          <h2>Add New Quiz</h2>
-          <form id="addQuizForm">
-            <div class="form-group"><label>Quiz Title</label><input type="text" id="newQuizTitle" required placeholder="e.g. Midterm Quiz" /></div>
-            <div class="form-group"><label>Due Date</label><input type="date" id="newQuizDueDate" required /></div>
-            <div class="form-group"><label>Points</label><input type="number" id="newQuizPoints" required placeholder="e.g. 100" /></div>
-            <div class="form-group"><label>Instructions</label><textarea id="newQuizInstructions" rows="4" placeholder="Quiz instructions..."></textarea></div>
-            <button type="submit" class="btn-add-subject"><i class="fas fa-plus"></i> Add Quiz</button>
-          </form>
-        </div></div>`;
+      modal.innerHTML = `
+        <div class="modal-content">
+          <span class="close">&times;</span>
+          <div class="modal-body">
+            <h2><i class="fas fa-question-circle"></i> Add New Quiz</h2>
+            <form id="addQuizForm">
+              <div class="form-group">
+                <label>Quiz Title</label>
+                <input type="text" id="newQuizTitle" required placeholder="e.g. Chapter 1 Quiz" />
+              </div>
+              <div class="form-group">
+                <label>Due Date</label>
+                <input type="date" id="newQuizDueDate" required />
+              </div>
+              <div class="form-group">
+                <label>Points</label>
+                <input type="number" id="newQuizPoints" required placeholder="e.g. 50" />
+              </div>
+              <div class="form-group">
+                <label>Instructions</label>
+                <textarea id="newQuizInstructions" rows="3" placeholder="Quiz instructions..."></textarea>
+              </div>
+              <button type="submit" class="btn-add-subject"><i class="fas fa-plus"></i> Add Quiz</button>
+            </form>
+          </div>
+        </div>
+      `;
       document.body.appendChild(modal);
       modal.style.display = 'block';
       modal.querySelector('.close').addEventListener('click', () => modal.remove());
-      modal.querySelector('#addQuizForm').addEventListener('submit', (e) => {
+      modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+      modal.querySelector('#addQuizForm').addEventListener('submit', async e => {
         e.preventDefault();
         subjects[subjectIndex].quizzes.push({
           title: document.getElementById('newQuizTitle').value.trim(),
@@ -953,9 +974,9 @@ function initializeSubjects() {
           status: 'available',
           instructions: document.getElementById('newQuizInstructions').value.trim()
         });
-        saveSubjects();
         renderSubjectDetails(subjectIndex);
         modal.remove();
+        await saveAndNotify('Quiz added and saved to cloud!');
       });
     } else {
       const modalId = `add${type.charAt(0).toUpperCase() + type.slice(1)}Modal`;
@@ -979,219 +1000,493 @@ function initializeSubjects() {
       const modal = document.createElement('div');
       modal.className = 'modal';
       modal.id = 'editQuizModal';
-      modal.innerHTML = `<div class="modal-content"><span class="close">&times;</span><div class="modal-body">
-          <h2>Edit Quiz</h2>
-          <form id="editQuizForm">
-            <div class="form-group"><label>Quiz Title</label><input type="text" id="editQuizTitle" value="${item.title}" required /></div>
-            <div class="form-group"><label>Due Date</label><input type="date" id="editQuizDueDate" value="${item.dueDate}" required /></div>
-            <div class="form-group"><label>Points</label><input type="number" id="editQuizPoints" value="${item.points}" required /></div>
-            <div class="form-group"><label>Instructions</label><textarea id="editQuizInstructions" rows="4">${item.instructions}</textarea></div>
-            <div class="form-actions">
-              <button type="submit" class="btn-save"><i class="fas fa-check"></i> Save Changes</button>
-              <button type="button" class="btn-delete" id="deleteQuizBtn"><i class="fas fa-trash"></i> Delete</button>
-            </div>
-          </form>
-        </div></div>`;
+      modal.innerHTML = `
+        <div class="modal-content">
+          <span class="close">&times;</span>
+          <div class="modal-body">
+            <h2><i class="fas fa-edit"></i> Edit Quiz</h2>
+            <form id="editQuizForm">
+              <div class="form-group">
+                <label>Quiz Title</label>
+                <input type="text" id="editQuizTitle" value="${item.title}" required />
+              </div>
+              <div class="form-group">
+                <label>Due Date</label>
+                <input type="date" id="editQuizDueDate" value="${item.dueDate}" required />
+              </div>
+              <div class="form-group">
+                <label>Points</label>
+                <input type="number" id="editQuizPoints" value="${item.points}" required />
+              </div>
+              <div class="form-group">
+                <label>Instructions</label>
+                <textarea id="editQuizInstructions" rows="3">${item.instructions || ''}</textarea>
+              </div>
+              <div class="form-actions">
+                <button type="submit" class="btn-save"><i class="fas fa-check"></i> Save Changes</button>
+                <button type="button" class="btn-delete" id="deleteQuizBtn"><i class="fas fa-trash"></i> Delete</button>
+              </div>
+            </form>
+          </div>
+        </div>
+      `;
       document.body.appendChild(modal);
       modal.style.display = 'block';
       modal.querySelector('.close').addEventListener('click', () => modal.remove());
-      modal.querySelector('#editQuizForm').addEventListener('submit', (e) => {
+      modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+      modal.querySelector('#editQuizForm').addEventListener('submit', async e => {
         e.preventDefault();
         sub.quizzes[itemIndex] = {
+          ...sub.quizzes[itemIndex],
           title: document.getElementById('editQuizTitle').value.trim(),
           dueDate: document.getElementById('editQuizDueDate').value,
           points: parseInt(document.getElementById('editQuizPoints').value),
-          status: item.status,
           instructions: document.getElementById('editQuizInstructions').value.trim()
         };
-        saveSubjects();
         renderSubjectDetails(subjectIndex);
         modal.remove();
+        await saveAndNotify('Quiz updated and saved to cloud!');
       });
-      modal.querySelector('#deleteQuizBtn').addEventListener('click', () => {
-        if (confirm('Are you sure you want to delete this quiz?')) {
+      modal.querySelector('#deleteQuizBtn').addEventListener('click', async () => {
+        if (confirm('Delete this quiz?')) {
           sub.quizzes.splice(itemIndex, 1);
-          saveSubjects();
           renderSubjectDetails(subjectIndex);
           modal.remove();
+          await saveAndNotify('Quiz deleted and synced to cloud.');
         }
       });
-    } else {
-      const cap = type.charAt(0).toUpperCase() + type.slice(1);
-      const modal = document.getElementById(`edit${cap}Modal`);
-      if (!modal) return;
-      document.getElementById(`edit${cap}Index`).value = itemIndex;
-      document.getElementById(`edit${cap}SubjectIndex`).value = subjectIndex;
-      if (type === 'task') {
-        document.getElementById('editTaskTitle').value = item.title;
-        document.getElementById('editTaskDueDate').value = item.dueDate;
-        document.getElementById('editTaskPriority').value = item.priority;
-        document.getElementById('editTaskStatus').value = item.status;
-        document.getElementById('editTaskDescription').value = item.description;
-      } else if (type === 'assignment') {
-        document.getElementById('editAssignmentTitle').value = item.title;
-        document.getElementById('editAssignmentDueDate').value = item.dueDate;
-        document.getElementById('editAssignmentPoints').value = item.points;
-        document.getElementById('editAssignmentStatus').value = item.status;
-        document.getElementById('editAssignmentInstructions').value = item.instructions;
-      } else if (type === 'lesson') {
-        document.getElementById('editLessonTitle').value = item.title;
-        document.getElementById('editLessonDuration').value = item.duration;
-        document.getElementById('editLessonStatus').value = item.status;
-        document.getElementById('editLessonContent').value = item.content;
-      }
-      modal.style.display = 'block';
+      return;
     }
+
+    const modalId = `edit${type.charAt(0).toUpperCase() + type.slice(1)}Modal`;
+    const modal = document.getElementById(modalId);
+    if (!modal) return;
+    document.getElementById(`edit${type.charAt(0).toUpperCase() + type.slice(1)}Index`).value = itemIndex;
+    document.getElementById(`edit${type.charAt(0).toUpperCase() + type.slice(1)}SubjectIndex`).value = subjectIndex;
+
+    if (type === 'task') {
+      document.getElementById('editTaskTitle').value = item.title;
+      document.getElementById('editTaskDueDate').value = item.dueDate;
+      document.getElementById('editTaskPriority').value = item.priority;
+      document.getElementById('editTaskStatus').value = item.status;
+      document.getElementById('editTaskDescription').value = item.description || '';
+    } else if (type === 'assignment') {
+      document.getElementById('editAssignmentTitle').value = item.title;
+      document.getElementById('editAssignmentDueDate').value = item.dueDate;
+      document.getElementById('editAssignmentPoints').value = item.points;
+      document.getElementById('editAssignmentStatus').value = item.status;
+      document.getElementById('editAssignmentInstructions').value = item.instructions || '';
+    } else if (type === 'lesson') {
+      document.getElementById('editLessonTitle').value = item.title;
+      document.getElementById('editLessonDuration').value = item.duration;
+      document.getElementById('editLessonStatus').value = item.status;
+      document.getElementById('editLessonContent').value = item.content || '';
+    }
+    modal.style.display = 'block';
   }
 
   // -------------------------
-  // SUBMIT ASSIGNMENT MODAL
+  // SUBMIT ASSIGNMENT (STUDENT) — per-student scoring
   // -------------------------
   function openSubmitAssignmentModal(subjectIndex, assignmentIndex) {
     const sub = subjects[subjectIndex];
     if (!sub) return;
     const assignment = sub.assignments[assignmentIndex];
     if (!assignment) return;
+
+    const existingSubmission = assignment.submissions?.find(s => s.studentId === userData?.id);
+
     const modal = document.createElement('div');
     modal.className = 'modal';
     modal.id = 'submitAssignmentModal';
-    modal.innerHTML = `<div class="modal-content"><span class="close">&times;</span><div class="modal-body">
-        <h2>Submit Assignment: ${assignment.title}</h2>
-        <form id="submitAssignmentForm">
-          <div class="form-group"><label>Upload Your Submission</label><input type="file" id="submitFile" required /></div>
-          <button type="submit" class="btn-add-subject"><i class="fas fa-upload"></i> Submit Assignment</button>
-        </form>
-      </div></div>`;
+    modal.innerHTML = `
+      <div class="modal-content submission-modal-content">
+        <span class="close">&times;</span>
+        <div class="modal-body">
+          <div class="submission-modal-header">
+            <div class="submission-icon"><i class="fas fa-paper-plane"></i></div>
+            <h2>Submit Assignment</h2>
+            <p class="submission-assignment-title">${assignment.title}</p>
+            <div class="submission-meta-row">
+              <span class="submission-meta-badge"><i class="fas fa-star"></i> ${assignment.points} pts</span>
+              <span class="submission-meta-badge due"><i class="fas fa-calendar"></i> Due: ${assignment.dueDate}</span>
+            </div>
+          </div>
+
+          ${existingSubmission ? `
+            <div class="already-submitted-banner">
+              <i class="fas fa-check-circle"></i>
+              <div>
+                <strong>Already Submitted</strong>
+                <span>You can re-submit to replace your current file.</span>
+              </div>
+            </div>
+            <div class="existing-submission-info">
+              <i class="fas fa-file"></i>
+              <span>${existingSubmission.fileName}</span>
+              <a href="${existingSubmission.fileUrl}" target="_blank" class="btn-view-file">
+                <i class="fas fa-eye"></i> View
+              </a>
+              ${existingSubmission.score !== undefined
+                ? `<div class="student-score-display"><i class="fas fa-trophy"></i> Score: <strong>${existingSubmission.score} / ${assignment.points}</strong></div>`
+                : `<div class="student-score-display pending-score"><i class="fas fa-clock"></i> Awaiting score</div>`
+              }
+            </div>
+          ` : ''}
+
+          <form id="submitAssignmentForm">
+            <div class="form-group upload-zone" id="uploadZone">
+              <input type="file" id="submitFile" style="display:none" required />
+              <label for="submitFile" class="upload-label">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <span id="uploadText">Click or drag to upload your file</span>
+                <small>Any file type accepted</small>
+              </label>
+            </div>
+            <div class="submission-note-group">
+              <label><i class="fas fa-sticky-note"></i> Note (Optional)</label>
+              <textarea id="submitNote" rows="3" placeholder="Add a note to your instructor..."></textarea>
+            </div>
+            <button type="submit" class="btn-submit-final">
+              <i class="fas fa-paper-plane"></i>
+              ${existingSubmission ? 'Re-submit Assignment' : 'Submit Assignment'}
+            </button>
+          </form>
+        </div>
+      </div>
+    `;
     document.body.appendChild(modal);
     modal.style.display = 'block';
-    modal.querySelector('.close').addEventListener('click', () => modal.remove());
-    modal.querySelector('#submitAssignmentForm').addEventListener('submit', async (e) => {
+
+    // Drag & drop + file select feedback
+    const uploadZone = modal.querySelector('#uploadZone');
+    const fileInput = modal.querySelector('#submitFile');
+    const uploadText = modal.querySelector('#uploadText');
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files[0]) {
+        uploadText.textContent = fileInput.files[0].name;
+        uploadZone.classList.add('file-selected');
+      }
+    });
+    uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragging'); });
+    uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragging'));
+    uploadZone.addEventListener('drop', e => {
       e.preventDefault();
-      const fileInput = document.getElementById('submitFile');
-      if (!fileInput.files[0]) { alert('Please select a file to submit.'); return; }
+      uploadZone.classList.remove('dragging');
+      if (e.dataTransfer.files[0]) {
+        fileInput.files = e.dataTransfer.files;
+        uploadText.textContent = e.dataTransfer.files[0].name;
+        uploadZone.classList.add('file-selected');
+      }
+    });
+
+    modal.querySelector('.close').addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+
+    modal.querySelector('#submitAssignmentForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      if (!fileInput.files[0]) { showToast('Please select a file.', 'error'); return; }
+
+      const submitBtn = modal.querySelector('.btn-submit-final');
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+
       const file = fileInput.files[0];
-      const fileUrl = await uploadFileToSupabase(file, `subjects/${sub.id}/${assignment.id}/submissions/${userData.id}/`);
-      if (!fileUrl) { alert('File upload failed. Please try again.'); return; }
+      const note = document.getElementById('submitNote').value.trim();
+      const fileUrl = await uploadFileToSupabase(file, `subjects/${sub.id}/${assignment.id}/submissions/${userData?.id}/`);
+
+      if (!fileUrl) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Assignment';
+        return;
+      }
+
       if (!assignment.submissions) assignment.submissions = [];
-      assignment.submissions.push({ studentId: userData.id, fileName: file.name, fileUrl, submittedAt: new Date().toISOString() });
-      saveSubjects();
+      // Remove prior submission from this student only
+      assignment.submissions = assignment.submissions.filter(s => s.studentId !== userData?.id);
+      assignment.submissions.push({
+        studentId: userData?.id,
+        studentName: userData?.name || userData?.id,
+        fileName: file.name,
+        fileUrl,
+        note,
+        submittedAt: new Date().toISOString(),
+        score: undefined  // scored individually by instructor
+      });
+
+      saveSubjects(false); // update localStorage immediately so UI reflects submission
       renderSubjectDetails(subjectIndex);
-      alert('Assignment submitted successfully!');
       modal.remove();
+      await saveAndNotify('Assignment submitted and saved to cloud!');
     });
   }
 
   // -------------------------
-  // VIEW SUBMISSIONS
+  // VIEW SUBMISSIONS + PER-STUDENT SCORING (INSTRUCTOR)
   // -------------------------
   function viewSubmissions(subjectIndex, assignmentIndex) {
     const sub = subjects[subjectIndex];
     if (!sub) return;
     const assignment = sub.assignments[assignmentIndex];
-    if (!assignment || !assignment.submissions) return;
+    if (!assignment) return;
+
+    const submissions = assignment.submissions || [];
+
+    function buildSubmissionCard(submission, i) {
+      const hasScore = submission.score !== undefined;
+      return `
+        <div class="submission-card ${hasScore ? 'has-score' : 'no-score'}" data-index="${i}">
+          <div class="submission-card-header">
+            <div class="student-avatar"><i class="fas fa-user-graduate"></i></div>
+            <div class="student-submission-info">
+              <h4>${submission.studentName || submission.studentId}</h4>
+              <span class="submission-time"><i class="fas fa-clock"></i> ${new Date(submission.submittedAt).toLocaleString()}</span>
+            </div>
+            <div class="score-display ${hasScore ? 'scored' : 'unscored'}">
+              ${hasScore
+                ? `<i class="fas fa-check-circle"></i> <strong>${submission.score}</strong> / ${assignment.points} pts`
+                : `<i class="fas fa-hourglass-half"></i> Not scored`}
+            </div>
+          </div>
+          ${submission.note ? `
+            <div class="submission-note">
+              <i class="fas fa-comment-alt"></i>
+              <span>${submission.note}</span>
+            </div>
+          ` : ''}
+          <div class="submission-file-row">
+            <div class="submission-file-info">
+              <i class="fas fa-file-alt"></i>
+              <span>${submission.fileName}</span>
+            </div>
+            <a href="${submission.fileUrl}" target="_blank" class="btn-download-submission">
+              <i class="fas fa-download"></i> Download
+            </a>
+          </div>
+          <div class="score-input-row">
+            <label class="score-label"><i class="fas fa-star"></i> Score</label>
+            <div class="score-input-group">
+              <input
+                type="number"
+                id="scoreInput_${i}"
+                class="score-number-input"
+                value="${hasScore ? submission.score : ''}"
+                min="0"
+                max="${assignment.points}"
+                step="0.5"
+                placeholder="0 – ${assignment.points}"
+              />
+              <span class="score-max">/ ${assignment.points}</span>
+              <button class="btn-save-score" data-submission-index="${i}">
+                <i class="fas fa-save"></i> Save Score
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
     const modal = document.createElement('div');
     modal.className = 'modal';
     modal.id = 'viewSubmissionsModal';
-    modal.innerHTML = `<div class="modal-content"><span class="close">&times;</span><div class="modal-body">
-        <h2>Submissions for: ${assignment.title}</h2>
-        <div class="submissions-list">
-          ${assignment.submissions.length > 0 ? assignment.submissions.map(s => `<div class="submission-item">
-              <p><strong>Student ID:</strong> ${s.studentId}</p>
-              <p><strong>File:</strong> <a href="${s.fileUrl}" target="_blank">${s.fileName}</a></p>
-              <p><strong>Submitted At:</strong> ${new Date(s.submittedAt).toLocaleString()}</p>
-            </div>`).join('') : '<p>No submissions yet.</p>'}
+    modal.innerHTML = `
+      <div class="modal-content submissions-viewer-content">
+        <span class="close">&times;</span>
+        <div class="modal-body">
+          <div class="submissions-viewer-header">
+            <div class="submissions-icon"><i class="fas fa-inbox"></i></div>
+            <h2>Submissions</h2>
+            <p class="submissions-assignment-title">${assignment.title}</p>
+            <div class="submissions-stats-row">
+              <div class="submissions-stat">
+                <span class="stat-num">${submissions.length}</span>
+                <span class="stat-lbl">Submitted</span>
+              </div>
+              <div class="submissions-stat">
+                <span class="stat-num scored-count">${submissions.filter(s => s.score !== undefined).length}</span>
+                <span class="stat-lbl">Scored</span>
+              </div>
+              <div class="submissions-stat">
+                <span class="stat-num">${assignment.points}</span>
+                <span class="stat-lbl">Max Points</span>
+              </div>
+            </div>
+          </div>
+          <div class="submissions-list">
+            ${submissions.length === 0
+              ? `<div class="no-submissions"><i class="fas fa-inbox"></i><p>No submissions yet.</p></div>`
+              : submissions.map((s, i) => buildSubmissionCard(s, i)).join('')
+            }
+          </div>
         </div>
-      </div></div>`;
+      </div>
+    `;
     document.body.appendChild(modal);
     modal.style.display = 'block';
     modal.querySelector('.close').addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+
+    // Per-student score saving — awaits Firestore write before showing toast
+    modal.querySelectorAll('.btn-save-score').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const submissionIndex = parseInt(btn.dataset.submissionIndex);
+        const scoreInput = modal.querySelector(`#scoreInput_${submissionIndex}`);
+        const scoreVal = parseFloat(scoreInput.value);
+
+        if (isNaN(scoreVal) || scoreVal < 0 || scoreVal > assignment.points) {
+          showToast(`Score must be between 0 and ${assignment.points}`, 'error');
+          scoreInput.classList.add('input-error');
+          setTimeout(() => scoreInput.classList.remove('input-error'), 1500);
+          return;
+        }
+
+        // Disable button while saving
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+        // Save score only to this specific student's submission
+        assignment.submissions[submissionIndex].score = scoreVal;
+
+        // Await full Firestore write before confirming
+        await saveAndNotify(`Score saved for ${assignment.submissions[submissionIndex].studentName || 'student'}!`);
+
+        // Update the score badge in the modal without full re-render
+        const card = modal.querySelector(`.submission-card[data-index="${submissionIndex}"]`);
+        const scoreDisplayEl = card.querySelector('.score-display');
+        scoreDisplayEl.innerHTML = `<i class="fas fa-check-circle"></i> <strong>${scoreVal}</strong> / ${assignment.points} pts`;
+        scoreDisplayEl.className = 'score-display scored';
+        card.className = 'submission-card has-score';
+
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-check"></i> Saved!';
+        btn.classList.add('saved');
+        setTimeout(() => { btn.innerHTML = '<i class="fas fa-save"></i> Save Score'; btn.classList.remove('saved'); }, 2000);
+
+        // Update scored count in header
+        const scoredCount = assignment.submissions.filter(s => s.score !== undefined).length;
+        const scoredCountEl = modal.querySelector('.scored-count');
+        if (scoredCountEl) scoredCountEl.textContent = scoredCount;
+
+        renderSubjectDetails(subjectIndex);
+      });
+    });
   }
 
   // -------------------------
   // DELETE ITEM
   // -------------------------
-  function deleteItem(subjectIndex, type, itemIndex) {
+  async function deleteItem(subjectIndex, type, itemIndex) {
     const sub = subjects[subjectIndex];
     if (!sub) return;
     const arrayName = `${type}s`;
-    if (!sub[arrayName] || !sub[arrayName][itemIndex]) return;
-    if (confirm(`Are you sure you want to delete this ${type}?`)) {
+    if (!sub[arrayName] || sub[arrayName][itemIndex] === undefined) return;
+    if (confirm(`Delete this ${type}?`)) {
       sub[arrayName].splice(itemIndex, 1);
-      saveSubjects();
       renderSubjectDetails(subjectIndex);
+      closeAllModals();
+      await saveAndNotify(`${type.charAt(0).toUpperCase() + type.slice(1)} deleted and synced to cloud.`);
     }
   }
 
   // -------------------------
-  // SAVE TO LOCALSTORAGE
+  // SAVE TO LOCALSTORAGE + FIRESTORE
   // -------------------------
-  function saveSubjects(autoSync = true) {
+
+  // Always saves to localStorage immediately.
+  // If autoSync=true AND user has a course, also awaits the Firestore write.
+  // Returns a Promise so callers can await it and show correct toast timing.
+  async function saveSubjects(autoSync = true) {
     localStorage.setItem('subjects', JSON.stringify(subjects));
-    if (autoSync && userData && userData.course) {
-      saveSubjectsToFirestore();
+    if (autoSync && userData?.course) {
+      await saveSubjectsToFirestore();
     }
   }
 
-  // -------------------------
-  // LOAD FROM FIRESTORE
-  // -------------------------
   async function loadSubjectsFromFirestore(courseId) {
     try {
-      const docRef = doc(db, "subjects", courseId);
-      const docSnap = await getDoc(docRef);
+      const docSnap = await getDoc(doc(db, "subjects", courseId));
       if (docSnap.exists()) {
-        // FIX 2: normalize all four arrays when loading from Firestore
-        subjects = (docSnap.data().subjects || subjects).map(normalizeSubject);
-        saveSubjects(false);
+        const cloudSubjects = docSnap.data().subjects;
+        if (cloudSubjects && cloudSubjects.length > 0) {
+          subjects = cloudSubjects;
+        }
+        // Sync cloud data down to localStorage (no Firestore write needed)
+        localStorage.setItem('subjects', JSON.stringify(subjects));
         renderSubjects();
+        console.log('Subjects loaded from Firestore:', subjects.length, 'subjects');
       } else {
-        saveSubjectsToFirestore();
+        // No cloud data yet — push local data up
+        console.log('No Firestore data found, pushing local data up...');
+        await saveSubjectsToFirestore();
       }
     } catch (error) {
       console.error("Error loading subjects from Firestore:", error);
+      showToast('Could not load from cloud. Using local data.', 'error');
     }
   }
 
-  // -------------------------
-  // SAVE TO FIRESTORE
-  // -------------------------
+  // Writes subjects array to Firestore and returns the Promise.
+  // Throws on failure so callers can catch and show error toasts.
   async function saveSubjectsToFirestore() {
-    if (!userData || !userData.course) return;
+    if (!userData?.course) {
+      console.warn('saveSubjectsToFirestore: no course set, skipping.');
+      return;
+    }
     try {
-      await setDoc(doc(db, "subjects", userData.course), { subjects, lastUpdated: serverTimestamp() });
-      console.log("Subjects synced to cloud successfully!");
+      await setDoc(doc(db, "subjects", userData.course), {
+        subjects: subjects,
+        lastUpdated: serverTimestamp()
+      });
+      console.log('Subjects saved to Firestore for course:', userData.course);
     } catch (error) {
       console.error("Error saving subjects to Firestore:", error);
+      showToast('Cloud save failed. Data saved locally only.', 'error');
+      throw error; // re-throw so awaiting callers know it failed
     }
   }
 
-  // -------------------------
-  // SETUP REALTIME SUBJECTS
-  // -------------------------
-  function setupRealtimeSubjects(courseId, onSubjectsUpdate) {
-    const docRef = doc(db, "subjects", courseId);
-    onSnapshot(docRef, (docSnap) => {
+  // Realtime listener — updates UI when another user (e.g. instructor) changes data.
+  // Uses a flag to avoid overwriting a save that's currently in flight.
+  let _isSaving = false;
+  function setupRealtimeSubjects(courseId, onUpdate) {
+    onSnapshot(doc(db, "subjects", courseId), docSnap => {
+      // Don't overwrite while we are mid-save (avoids echo loop)
+      if (_isSaving) return;
       if (docSnap.exists()) {
-        // FIX 3: normalize on every realtime snapshot
-        subjects = (docSnap.data().subjects || subjects).map(normalizeSubject);
-        saveSubjects(false);
-        renderSubjects();
-        const activeItem = document.querySelector('.subject-list-item.active');
-        if (activeItem) renderSubjectDetails(activeItem.dataset.index);
-        if (onSubjectsUpdate) onSubjectsUpdate(subjects);
-        console.log("Realtime update: Subjects refreshed from cloud.");
+        const cloudSubjects = docSnap.data().subjects;
+        if (cloudSubjects && cloudSubjects.length > 0) {
+          subjects = cloudSubjects;
+          localStorage.setItem('subjects', JSON.stringify(subjects));
+          renderSubjects();
+          const activeItem = document.querySelector('.subject-list-item.active');
+          if (activeItem) renderSubjectDetails(activeItem.dataset.index);
+          if (onUpdate) onUpdate(subjects);
+          console.log('Realtime update received from Firestore.');
+        }
       }
-    }, (error) => {
-      console.error("Realtime listener error:", error);
-    });
+    }, error => console.error("Realtime listener error:", error));
   }
 
-  // Initial Render
+  // Wrapper used everywhere a save + toast is needed.
+  // Awaits the full Firestore write before showing success toast.
+  async function saveAndNotify(successMsg = 'Saved!') {
+    _isSaving = true;
+    try {
+      await saveSubjects(true);
+      showToast(successMsg, 'success');
+    } catch (_) {
+      // error toast already shown inside saveSubjectsToFirestore
+    } finally {
+      _isSaving = false;
+    }
+  }
+
+  // Initial render
   renderSubjects();
 }
 
 // =========================
-// PROFILE PAGE FUNCTIONALITY
+// PROFILE PAGE
 // =========================
 function initializeProfile() {
   const editBtn = document.getElementById('editProfileBtn');
@@ -1211,16 +1506,18 @@ function initializeProfile() {
     document.getElementById('editGender').value = document.getElementById('infoGender').textContent;
     const dobText = document.getElementById('infoDOB').textContent;
     const dateObj = new Date(dobText);
-    if (!isNaN(dateObj.getTime())) document.getElementById('editDOB').value = dateObj.toISOString().split('T')[0];
+    if (!isNaN(dateObj.getTime())) {
+      document.getElementById('editDOB').value = dateObj.toISOString().split('T')[0];
+    }
     modal.style.display = 'block';
   });
 
   const closeModal = () => modal.style.display = 'none';
-  if (closeBtn) closeBtn.addEventListener('click', closeModal);
-  if (cancelBtn) cancelBtn.addEventListener('click', closeModal);
-  window.addEventListener('click', (e) => { if (e.target === modal) closeModal(); });
+  closeBtn?.addEventListener('click', closeModal);
+  cancelBtn?.addEventListener('click', closeModal);
+  window.addEventListener('click', e => { if (e.target === modal) closeModal(); });
 
-  editForm.addEventListener('submit', (e) => {
+  editForm.addEventListener('submit', e => {
     e.preventDefault();
     const newData = {
       fullName: document.getElementById('editName').value,
@@ -1230,13 +1527,15 @@ function initializeProfile() {
       gender: document.getElementById('editGender').value
     };
     const dateObj = new Date(newData.dob);
-    const displayDate = !isNaN(dateObj.getTime()) ? dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : newData.dob;
+    const displayDate = !isNaN(dateObj.getTime())
+      ? dateObj.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })
+      : newData.dob;
     const uiData = { ...newData, dob: displayDate };
     updateProfileUI(uiData);
     localStorage.setItem('userProfile', JSON.stringify(uiData));
-    const userData = JSON.parse(localStorage.getItem('userData')) || {};
-    userData.name = newData.fullName;
-    localStorage.setItem('userData', JSON.stringify(userData));
+    const ud = JSON.parse(localStorage.getItem('userData')) || {};
+    ud.name = newData.fullName;
+    localStorage.setItem('userData', JSON.stringify(ud));
     closeModal();
   });
 }
@@ -1258,7 +1557,7 @@ function updateProfileUI(data) {
 }
 
 // =========================
-// GRADES PAGE FUNCTIONALITY
+// GRADES
 // =========================
 function initializeGradesTable() {
   const rows = document.querySelectorAll('.grades-table .table-row');
@@ -1272,13 +1571,11 @@ function initializeGradesTable() {
 
 function initializeGradesFilter() {
   const controls = document.querySelector('.grades-controls');
-  if (!controls) return;
   const table = document.querySelector('.grades-table');
-  if (!table) return;
-  const buttons = controls.querySelectorAll('button[data-term]');
-  buttons.forEach(button => {
+  if (!controls || !table) return;
+  controls.querySelectorAll('button[data-term]').forEach(button => {
     button.addEventListener('click', () => {
-      buttons.forEach(btn => btn.classList.remove('active'));
+      controls.querySelectorAll('button[data-term]').forEach(b => b.classList.remove('active'));
       button.classList.add('active');
       const term = button.dataset.term;
       table.classList.remove('show-prelim', 'show-midterm', 'show-final');
@@ -1288,7 +1585,7 @@ function initializeGradesFilter() {
 }
 
 // =========================
-// INITIALIZE EVERYTHING ON DOM
+// INITIALIZE ALL
 // =========================
 document.addEventListener("DOMContentLoaded", () => {
   initializeTheme();
@@ -1303,19 +1600,21 @@ document.addEventListener("DOMContentLoaded", () => {
   initializeGradesTable();
   initializeGradesFilter();
 
-  if (document.getElementById("darkModeBtn")) document.getElementById("darkModeBtn").addEventListener("click", () => applyTheme("dark"));
-  if (document.getElementById("lightModeBtn")) document.getElementById("lightModeBtn").addEventListener("click", () => applyTheme("light"));
-  if (document.getElementById("darkThemeBtn")) document.getElementById("darkThemeBtn").addEventListener("click", () => applyTheme("dark"));
-  if (document.getElementById("lightThemeBtn")) document.getElementById("lightThemeBtn").addEventListener("click", () => applyTheme("light"));
-
+  document.getElementById("darkModeBtn")?.addEventListener("click", () => applyTheme("dark"));
+  document.getElementById("lightModeBtn")?.addEventListener("click", () => applyTheme("light"));
+  document.getElementById("darkThemeBtn")?.addEventListener("click", () => applyTheme("dark"));
+  document.getElementById("lightThemeBtn")?.addEventListener("click", () => applyTheme("light"));
   document.getElementById("logoutBtn")?.addEventListener("click", logout);
 });
 
 // =========================
-// EXPORT
+// EXPORTS
 // =========================
 export { logout, applyTheme };
 
+// =========================
+// LEGACY SUPABASE SUBMISSION (window global)
+// =========================
 window.submitStudentFile = async function(subjectId, taskId, file) {
   const { data: { session } } = await supabase.auth.getSession();
   if (!session) { alert("Please login first"); return; }
@@ -1325,8 +1624,7 @@ window.submitStudentFile = async function(subjectId, taskId, file) {
     const { error } = await supabase.storage.from("files").upload(path, file, { upsert: true });
     if (error) throw error;
     const fileUrl = supabase.storage.from('files').getPublicUrl(path).data.publicUrl;
-    const taskRef = doc(db, "subjects", subjectId, "tasks", taskId);
-    await updateDoc(taskRef, {
+    await updateDoc(doc(db, "subjects", subjectId, "tasks", taskId), {
       submissions: arrayUnion({ userId, name: file.name, url: fileUrl, time: new Date().toISOString() }),
       updatedAt: serverTimestamp()
     });

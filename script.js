@@ -38,7 +38,8 @@ let subjects = JSON.parse(localStorage.getItem('subjects')) || [
         status: "pending",
         description: "Solve all exercises in Chapter 5",
         file: null,
-        fileUrl: null
+        fileUrl: null,
+        submissions: []
       }
     ],
     assignments: [
@@ -463,22 +464,45 @@ function initializeSubjects() {
           <div class="items-list">
             ${sub.tasks.length === 0
               ? '<p style="color:var(--text-secondary);padding:20px;text-align:center;">No tasks yet.</p>'
-              : sub.tasks.map((task, i) => `
-                <div class="item-card">
-                  <div class="item-info">
-                    <h4>${task.title}</h4>
-                    <p><i class="fas fa-calendar"></i> Due: ${task.dueDate} &nbsp;|&nbsp; <i class="fas fa-flag"></i> Priority: ${task.priority} &nbsp;|&nbsp; <i class="fas fa-circle"></i> Status: ${task.status}</p>
-                    <p>${task.description || ''}</p>
-                    ${task.fileUrl ? `<p><a href="${task.fileUrl}" target="_blank" style="color:var(--accent);"><i class="fas fa-paperclip"></i> ${task.file}</a></p>` : ''}
-                  </div>
-                  ${isInstructor ? `
-                    <div class="item-actions">
-                      <button class="btn-edit-item" data-type="task" data-item-index="${i}" data-subject-index="${index}"><i class="fas fa-edit"></i></button>
-                      <button class="btn-delete-item" data-type="task" data-item-index="${i}" data-subject-index="${index}"><i class="fas fa-trash"></i></button>
+              : sub.tasks.map((task, i) => {
+                  const myTaskSubmission = task.submissions?.find(s => s.studentId === userData?.id);
+                  return `
+                    <div class="item-card">
+                      <div class="item-info">
+                        <h4>${task.title}</h4>
+                        <p><i class="fas fa-calendar"></i> Due: ${task.dueDate} &nbsp;|&nbsp; <i class="fas fa-flag"></i> Priority: ${task.priority} &nbsp;|&nbsp; <i class="fas fa-circle"></i> Status: ${task.status}</p>
+                        <p>${task.description || ''}</p>
+                        ${task.fileUrl ? `<p><a href="${task.fileUrl}" target="_blank" style="color:var(--accent);"><i class="fas fa-paperclip"></i> ${task.file}</a></p>` : ''}
+                        ${!isInstructor ? `
+                          ${myTaskSubmission ? `
+                            <span class="assignment-submitted-badge ${myTaskSubmission.score !== undefined ? 'scored' : ''}">
+                              ${myTaskSubmission.score !== undefined
+                                ? `<i class="fas fa-trophy"></i> Score: ${myTaskSubmission.score} pts`
+                                : `<i class="fas fa-check"></i> Submitted — Awaiting score`}
+                            </span>
+                          ` : ''}
+                        ` : `
+                          <span style="color:var(--text-secondary);font-size:0.88em;">
+                            <i class="fas fa-users"></i> ${task.submissions?.length || 0} submission(s)
+                          </span>
+                        `}
+                      </div>
+                      <div class="item-actions">
+                        ${!isInstructor ? `
+                          <button class="btn-submit-task" data-task-index="${i}" data-subject-index="${index}">
+                            <i class="fas fa-paper-plane"></i> ${myTaskSubmission ? 'Re-submit' : 'Submit'}
+                          </button>
+                        ` : `
+                          <button class="btn-view-task-submissions" data-task-index="${i}" data-subject-index="${index}">
+                            <i class="fas fa-inbox"></i> Submissions (${task.submissions?.length || 0})
+                          </button>
+                          <button class="btn-edit-item" data-type="task" data-item-index="${i}" data-subject-index="${index}"><i class="fas fa-edit"></i></button>
+                          <button class="btn-delete-item" data-type="task" data-item-index="${i}" data-subject-index="${index}"><i class="fas fa-trash"></i></button>
+                        `}
+                      </div>
                     </div>
-                  ` : ''}
-                </div>
-              `).join('')
+                  `;
+                }).join('')
             }
           </div>
         </div>
@@ -635,6 +659,16 @@ function initializeSubjects() {
       btn.addEventListener('click', () => deleteItem(parseInt(btn.dataset.subjectIndex), btn.dataset.type, parseInt(btn.dataset.itemIndex)));
     });
 
+    // Submit task (student)
+    document.querySelectorAll('.btn-submit-task').forEach(btn => {
+      btn.addEventListener('click', () => openSubmitTaskModal(parseInt(btn.dataset.subjectIndex), parseInt(btn.dataset.taskIndex)));
+    });
+
+    // View task submissions (instructor)
+    document.querySelectorAll('.btn-view-task-submissions').forEach(btn => {
+      btn.addEventListener('click', () => viewTaskSubmissions(parseInt(btn.dataset.subjectIndex), parseInt(btn.dataset.taskIndex)));
+    });
+
     // Submit assignment (student)
     document.querySelectorAll('.btn-submit-assignment').forEach(btn => {
       btn.addEventListener('click', () => openSubmitAssignmentModal(parseInt(btn.dataset.subjectIndex), parseInt(btn.dataset.assignmentIndex)));
@@ -664,8 +698,8 @@ function initializeSubjects() {
 
   function closeAllModals() {
     document.querySelectorAll('.modal').forEach(m => m.style.display = 'none');
-    // Also remove any dynamically created modals
-    document.querySelectorAll('#addQuizModal, #editQuizModal, #submitAssignmentModal, #viewSubmissionsModal').forEach(m => m.remove());
+    // Remove any dynamically created modals
+    document.querySelectorAll('#addQuizModal, #editQuizModal, #submitAssignmentModal, #viewSubmissionsModal, #submitTaskModal, #viewTaskSubmissionsModal').forEach(m => m.remove());
   }
 
   document.querySelectorAll('.modal .close').forEach(btn => btn.addEventListener('click', closeAllModals));
@@ -745,7 +779,8 @@ function initializeSubjects() {
       priority: document.getElementById('newTaskPriority').value,
       status: 'pending',
       description: document.getElementById('newTaskDescription').value.trim(),
-      file: null, fileUrl: null
+      file: null, fileUrl: null,
+      submissions: []
     };
     const fileInput = document.getElementById('newTaskFile');
     if (fileInput?.files[0]) {
@@ -1373,8 +1408,288 @@ function initializeSubjects() {
   }
 
   // -------------------------
-  // DELETE ITEM
+  // SUBMIT TASK (STUDENT) — per-student scoring
   // -------------------------
+  function openSubmitTaskModal(subjectIndex, taskIndex) {
+    const sub = subjects[subjectIndex];
+    if (!sub) return;
+    const task = sub.tasks[taskIndex];
+    if (!task) return;
+
+    if (!task.submissions) task.submissions = [];
+    const existingSubmission = task.submissions.find(s => s.studentId === userData?.id);
+
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.id = 'submitTaskModal';
+    modal.innerHTML = `
+      <div class="modal-content submission-modal-content">
+        <span class="close">&times;</span>
+        <div class="modal-body">
+          <div class="submission-modal-header">
+            <div class="submission-icon"><i class="fas fa-tasks"></i></div>
+            <h2>Submit Task</h2>
+            <p class="submission-assignment-title">${task.title}</p>
+            <div class="submission-meta-row">
+              <span class="submission-meta-badge"><i class="fas fa-flag"></i> ${task.priority} priority</span>
+              <span class="submission-meta-badge due"><i class="fas fa-calendar"></i> Due: ${task.dueDate}</span>
+            </div>
+          </div>
+
+          ${existingSubmission ? `
+            <div class="already-submitted-banner">
+              <i class="fas fa-check-circle"></i>
+              <div>
+                <strong>Already Submitted</strong>
+                <span>You can re-submit to replace your current file.</span>
+              </div>
+            </div>
+            <div class="existing-submission-info">
+              <i class="fas fa-file"></i>
+              <span>${existingSubmission.fileName}</span>
+              <a href="${existingSubmission.fileUrl}" target="_blank" class="btn-view-file">
+                <i class="fas fa-eye"></i> View
+              </a>
+              ${existingSubmission.score !== undefined
+                ? `<div class="student-score-display"><i class="fas fa-trophy"></i> Score: <strong>${existingSubmission.score} pts</strong></div>`
+                : `<div class="student-score-display pending-score"><i class="fas fa-clock"></i> Awaiting score</div>`
+              }
+            </div>
+          ` : ''}
+
+          <form id="submitTaskForm">
+            <div class="form-group upload-zone" id="uploadZoneTask">
+              <input type="file" id="submitTaskFile" style="display:none" required />
+              <label for="submitTaskFile" class="upload-label">
+                <i class="fas fa-cloud-upload-alt"></i>
+                <span id="uploadTextTask">Click or drag to upload your file</span>
+                <small>Any file type accepted</small>
+              </label>
+            </div>
+            <div class="submission-note-group">
+              <label><i class="fas fa-sticky-note"></i> Note (Optional)</label>
+              <textarea id="submitTaskNote" rows="3" placeholder="Add a note to your instructor..."></textarea>
+            </div>
+            <button type="submit" class="btn-submit-final">
+              <i class="fas fa-paper-plane"></i>
+              ${existingSubmission ? 'Re-submit Task' : 'Submit Task'}
+            </button>
+          </form>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    modal.style.display = 'block';
+
+    // Drag & drop + file select feedback
+    const uploadZone = modal.querySelector('#uploadZoneTask');
+    const fileInput = modal.querySelector('#submitTaskFile');
+    const uploadText = modal.querySelector('#uploadTextTask');
+    fileInput.addEventListener('change', () => {
+      if (fileInput.files[0]) {
+        uploadText.textContent = fileInput.files[0].name;
+        uploadZone.classList.add('file-selected');
+      }
+    });
+    uploadZone.addEventListener('dragover', e => { e.preventDefault(); uploadZone.classList.add('dragging'); });
+    uploadZone.addEventListener('dragleave', () => uploadZone.classList.remove('dragging'));
+    uploadZone.addEventListener('drop', e => {
+      e.preventDefault();
+      uploadZone.classList.remove('dragging');
+      if (e.dataTransfer.files[0]) {
+        fileInput.files = e.dataTransfer.files;
+        uploadText.textContent = e.dataTransfer.files[0].name;
+        uploadZone.classList.add('file-selected');
+      }
+    });
+
+    modal.querySelector('.close').addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+
+    modal.querySelector('#submitTaskForm').addEventListener('submit', async e => {
+      e.preventDefault();
+      if (!fileInput.files[0]) { showToast('Please select a file.', 'error'); return; }
+
+      const submitBtn = modal.querySelector('.btn-submit-final');
+      submitBtn.disabled = true;
+      submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
+
+      const file = fileInput.files[0];
+      const note = document.getElementById('submitTaskNote').value.trim();
+      const fileUrl = await uploadFileToSupabase(file, `subjects/${sub.id}/${task.id}/submissions/${userData?.id}/`);
+
+      if (!fileUrl) {
+        submitBtn.disabled = false;
+        submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Task';
+        return;
+      }
+
+      // Remove prior submission from this student only, keep others
+      task.submissions = task.submissions.filter(s => s.studentId !== userData?.id);
+      task.submissions.push({
+        studentId: userData?.id,
+        studentName: userData?.name || userData?.id,
+        fileName: file.name,
+        fileUrl,
+        note,
+        submittedAt: new Date().toISOString(),
+        score: undefined  // scored individually by instructor
+      });
+
+      saveSubjects(false);
+      renderSubjectDetails(subjectIndex);
+      modal.remove();
+      await saveAndNotify('Task submitted and saved to cloud!');
+    });
+  }
+
+  // -------------------------
+  // VIEW TASK SUBMISSIONS + PER-STUDENT SCORING (INSTRUCTOR)
+  // -------------------------
+  function viewTaskSubmissions(subjectIndex, taskIndex) {
+    const sub = subjects[subjectIndex];
+    if (!sub) return;
+    const task = sub.tasks[taskIndex];
+    if (!task) return;
+
+    const submissions = task.submissions || [];
+
+    function buildTaskSubmissionCard(submission, i) {
+      const hasScore = submission.score !== undefined;
+      return `
+        <div class="submission-card ${hasScore ? 'has-score' : 'no-score'}" data-index="${i}">
+          <div class="submission-card-header">
+            <div class="student-avatar"><i class="fas fa-user-graduate"></i></div>
+            <div class="student-submission-info">
+              <h4>${submission.studentName || submission.studentId}</h4>
+              <span class="submission-time"><i class="fas fa-clock"></i> ${new Date(submission.submittedAt).toLocaleString()}</span>
+            </div>
+            <div class="score-display ${hasScore ? 'scored' : 'unscored'}">
+              ${hasScore
+                ? `<i class="fas fa-check-circle"></i> <strong>${submission.score}</strong> pts`
+                : `<i class="fas fa-hourglass-half"></i> Not scored`}
+            </div>
+          </div>
+          ${submission.note ? `
+            <div class="submission-note">
+              <i class="fas fa-comment-alt"></i>
+              <span>${submission.note}</span>
+            </div>
+          ` : ''}
+          <div class="submission-file-row">
+            <div class="submission-file-info">
+              <i class="fas fa-file-alt"></i>
+              <span>${submission.fileName}</span>
+            </div>
+            <a href="${submission.fileUrl}" target="_blank" class="btn-download-submission">
+              <i class="fas fa-download"></i> Download
+            </a>
+          </div>
+          <div class="score-input-row">
+            <label class="score-label"><i class="fas fa-star"></i> Score</label>
+            <div class="score-input-group">
+              <input
+                type="number"
+                id="taskScoreInput_${i}"
+                class="score-number-input"
+                value="${hasScore ? submission.score : ''}"
+                min="0"
+                step="0.5"
+                placeholder="Points"
+              />
+              <span class="score-max">pts</span>
+              <button class="btn-save-score" data-submission-index="${i}">
+                <i class="fas fa-save"></i> Save Score
+              </button>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    const modal = document.createElement('div');
+    modal.className = 'modal';
+    modal.id = 'viewTaskSubmissionsModal';
+    modal.innerHTML = `
+      <div class="modal-content submissions-viewer-content">
+        <span class="close">&times;</span>
+        <div class="modal-body">
+          <div class="submissions-viewer-header">
+            <div class="submissions-icon"><i class="fas fa-tasks"></i></div>
+            <h2>Task Submissions</h2>
+            <p class="submissions-assignment-title">${task.title}</p>
+            <div class="submissions-stats-row">
+              <div class="submissions-stat">
+                <span class="stat-num">${submissions.length}</span>
+                <span class="stat-lbl">Submitted</span>
+              </div>
+              <div class="submissions-stat">
+                <span class="stat-num task-scored-count">${submissions.filter(s => s.score !== undefined).length}</span>
+                <span class="stat-lbl">Scored</span>
+              </div>
+              <div class="submissions-stat">
+                <span class="stat-num"><i class="fas fa-flag" style="font-size:0.8em"></i></span>
+                <span class="stat-lbl">${task.priority}</span>
+              </div>
+            </div>
+          </div>
+          <div class="submissions-list">
+            ${submissions.length === 0
+              ? `<div class="no-submissions"><i class="fas fa-inbox"></i><p>No submissions yet.</p></div>`
+              : submissions.map((s, i) => buildTaskSubmissionCard(s, i)).join('')
+            }
+          </div>
+        </div>
+      </div>
+    `;
+    document.body.appendChild(modal);
+    modal.style.display = 'block';
+    modal.querySelector('.close').addEventListener('click', () => modal.remove());
+    modal.addEventListener('click', e => { if (e.target === modal) modal.remove(); });
+
+    // Per-student score saving for tasks
+    modal.querySelectorAll('.btn-save-score').forEach(btn => {
+      btn.addEventListener('click', async () => {
+        const submissionIndex = parseInt(btn.dataset.submissionIndex);
+        const scoreInput = modal.querySelector(`#taskScoreInput_${submissionIndex}`);
+        const scoreVal = parseFloat(scoreInput.value);
+
+        if (isNaN(scoreVal) || scoreVal < 0) {
+          showToast('Please enter a valid score.', 'error');
+          scoreInput.classList.add('input-error');
+          setTimeout(() => scoreInput.classList.remove('input-error'), 1500);
+          return;
+        }
+
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+
+        // Save score only to this specific student's task submission
+        task.submissions[submissionIndex].score = scoreVal;
+
+        await saveAndNotify(`Score saved for ${task.submissions[submissionIndex].studentName || 'student'}!`);
+
+        // Update badge in modal
+        const card = modal.querySelector(`.submission-card[data-index="${submissionIndex}"]`);
+        const scoreDisplayEl = card.querySelector('.score-display');
+        scoreDisplayEl.innerHTML = `<i class="fas fa-check-circle"></i> <strong>${scoreVal}</strong> pts`;
+        scoreDisplayEl.className = 'score-display scored';
+        card.className = 'submission-card has-score';
+
+        btn.disabled = false;
+        btn.innerHTML = '<i class="fas fa-check"></i> Saved!';
+        btn.classList.add('saved');
+        setTimeout(() => { btn.innerHTML = '<i class="fas fa-save"></i> Save Score'; btn.classList.remove('saved'); }, 2000);
+
+        // Update scored count in header
+        const scoredCount = task.submissions.filter(s => s.score !== undefined).length;
+        const scoredCountEl = modal.querySelector('.task-scored-count');
+        if (scoredCountEl) scoredCountEl.textContent = scoredCount;
+
+        renderSubjectDetails(subjectIndex);
+      });
+    });
+  }
   async function deleteItem(subjectIndex, type, itemIndex) {
     const sub = subjects[subjectIndex];
     if (!sub) return;

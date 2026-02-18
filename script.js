@@ -1788,13 +1788,35 @@ function initializeSubjects() {
       console.warn('saveSubjectsToFirestore: no course set, attempting to locate matching course document...');
       const snap = await getDocs(collection(db, 'subjects'));
       let foundId = null;
+
+      // First pass: try to match by subject ID (fast & reliable when IDs align)
       snap.forEach(d => {
+        if (foundId) return;
         const cloudSubs = d.data()?.subjects || [];
-        // If any subject id matches a local subject id, assume this is the right course doc
-        if (!foundId && cloudSubs.some(cs => subjects.some(ls => ls.id && ls.id === cs.id))) {
+        if (cloudSubs.some(cs => subjects.some(ls => ls.id && ls.id === cs.id))) {
           foundId = d.id;
         }
       });
+
+      // Second pass: try to match by subject name + teacher (more tolerant)
+      if (!foundId) {
+        snap.forEach(d => {
+          if (foundId) return;
+          const cloudSubs = d.data()?.subjects || [];
+          for (const cs of cloudSubs) {
+            for (const ls of subjects) {
+              if (!ls.name || !cs.name) continue;
+              const namesMatch = ls.name.trim().toLowerCase() === cs.name.trim().toLowerCase();
+              const teacherMatch = (ls.teacher || '').trim().toLowerCase() === (cs.teacher || '').trim().toLowerCase();
+              if (namesMatch && teacherMatch) {
+                foundId = d.id;
+                break;
+              }
+            }
+            if (foundId) break;
+          }
+        });
+      }
 
       if (foundId) {
         await setDoc(doc(db, 'subjects', foundId), {
@@ -1802,6 +1824,7 @@ function initializeSubjects() {
           lastUpdated: serverTimestamp()
         });
         console.log('Subjects saved to Firestore for discovered course doc:', foundId);
+        showToast(`Cloud save to doc: ${foundId}`, 'success');
         return;
       }
 

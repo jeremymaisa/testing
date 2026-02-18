@@ -4910,7 +4910,7 @@ body.light-mode .btn-score-task:hover {
 }
 
 
-/* ---- "SUBMITTED" BADGE on assignment card ---- */
+/* ---- "SUBMITTED" BADGE on assignment/task card ---- */
 .assignment-submitted-badge {
   display: inline-flex;
   align-items: center;
@@ -4929,6 +4929,80 @@ body.light-mode .btn-score-task:hover {
   background: rgba(var(--accent-rgb), 0.12);
   border-color: rgba(var(--accent-rgb), 0.3);
   color: var(--accent);
+}
+
+/* ---- SUBMIT TASK / VIEW TASK SUBMISSIONS BUTTONS ---- */
+/* These sit inside .item-actions, styled like the assignment equivalents */
+
+.btn-submit-task {
+  padding: 8px 14px;
+  background: rgba(var(--accent-rgb), 0.12);
+  color: var(--accent);
+  border: 1.5px solid rgba(var(--accent-rgb), 0.3);
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.88em;
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  transition: 0.25s;
+  white-space: nowrap;
+}
+
+.btn-submit-task:hover {
+  background: var(--accent);
+  color: var(--bg-primary);
+  transform: translateY(-1px);
+  box-shadow: 0 5px 15px rgba(var(--accent-rgb), 0.3);
+}
+
+.btn-view-task-submissions {
+  padding: 8px 14px;
+  background: rgba(251, 191, 36, 0.1);
+  color: #fbbf24;
+  border: 1.5px solid rgba(251, 191, 36, 0.3);
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: 700;
+  font-size: 0.88em;
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  transition: 0.25s;
+  white-space: nowrap;
+}
+
+.btn-view-task-submissions:hover {
+  background: rgba(251, 191, 36, 0.25);
+  border-color: #fbbf24;
+  transform: translateY(-1px);
+  box-shadow: 0 5px 15px rgba(251, 191, 36, 0.2);
+}
+
+/* Light mode overrides for task buttons */
+body.light-mode .btn-submit-task {
+  background: rgba(0, 102, 161, 0.1);
+  color: #0066a1;
+  border-color: rgba(0, 102, 161, 0.3);
+}
+
+body.light-mode .btn-submit-task:hover {
+  background: #0066a1;
+  color: #fff;
+}
+
+body.light-mode .btn-view-task-submissions {
+  background: rgba(245, 124, 0, 0.1);
+  color: #e65100;
+  border-color: rgba(245, 124, 0, 0.3);
+}
+
+body.light-mode .btn-view-task-submissions:hover {
+  background: rgba(245, 124, 0, 0.2);
+  border-color: #e65100;
 }
 
 

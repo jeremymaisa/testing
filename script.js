@@ -1249,10 +1249,18 @@ function initializeSubjects() {
         score: undefined  // scored individually by instructor
       });
 
-      saveSubjects(false); // update localStorage immediately so UI reflects submission
+      // Save to localStorage immediately so UI reflects submission
+      localStorage.setItem('subjects', JSON.stringify(subjects));
       renderSubjectDetails(subjectIndex);
       modal.remove();
-      await saveAndNotify('Assignment submitted and saved to cloud!');
+
+      // Bypass saveAndNotify so _isSaving flag doesn't block instructor's realtime listener
+      try {
+        await saveSubjectsToFirestore();
+        showToast('Assignment submitted and saved to cloud!', 'success');
+      } catch (_) {
+        showToast('Submitted locally. Cloud sync failed.', 'error');
+      }
     });
   }
 
@@ -1515,7 +1523,7 @@ function initializeSubjects() {
       submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Uploading...';
 
       const file = fileInput.files[0];
-      const note = document.getElementById('submitTaskNote').value.trim();
+      const note = modal.querySelector('#submitTaskNote').value.trim(); // FIX: use modal.querySelector not global getElementById
       const fileUrl = await uploadFileToSupabase(file, `subjects/${sub.id}/${task.id}/submissions/${userData?.id}/`);
 
       if (!fileUrl) {
@@ -1524,22 +1532,35 @@ function initializeSubjects() {
         return;
       }
 
-      // Remove prior submission from this student only, keep others
-      task.submissions = task.submissions.filter(s => s.studentId !== userData?.id);
-      task.submissions.push({
+      // FIX: always mutate through subjects[subjectIndex].tasks[taskIndex]
+      // so the top-level subjects array is guaranteed to reflect the change
+      const taskRef = subjects[subjectIndex].tasks[taskIndex];
+      if (!taskRef.submissions) taskRef.submissions = [];
+      taskRef.submissions = taskRef.submissions.filter(s => s.studentId !== userData?.id);
+      taskRef.submissions.push({
         studentId: userData?.id,
         studentName: userData?.name || userData?.id,
         fileName: file.name,
         fileUrl,
         note,
         submittedAt: new Date().toISOString(),
-        score: undefined  // scored individually by instructor
+        score: undefined
       });
 
-      saveSubjects(false);
+      // Save to localStorage immediately so UI reflects submission
+      localStorage.setItem('subjects', JSON.stringify(subjects));
       renderSubjectDetails(subjectIndex);
       modal.remove();
-      await saveAndNotify('Task submitted and saved to cloud!');
+
+      // FIX: bypass saveAndNotify (which sets _isSaving=true and blocks the
+      // instructor's realtime onSnapshot listener). Instead write directly to
+      // Firestore without the flag, so the instructor's listener fires normally.
+      try {
+        await saveSubjectsToFirestore();
+        showToast('Task submitted and saved to cloud!', 'success');
+      } catch (_) {
+        showToast('Submitted locally. Cloud sync failed.', 'error');
+      }
     });
   }
 

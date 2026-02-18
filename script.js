@@ -12,6 +12,8 @@ import {
   doc,
   setDoc,
   getDoc,
+  getDocs,
+  collection,
   onSnapshot,
   serverTimestamp,
   updateDoc,
@@ -1764,20 +1766,52 @@ function initializeSubjects() {
   // Writes subjects array to Firestore and returns the Promise.
   // Throws on failure so callers can catch and show error toasts.
   async function saveSubjectsToFirestore() {
-    if (!userData?.course) {
-      console.warn('saveSubjectsToFirestore: no course set, skipping.');
-      return;
+    // If we have an explicit course id, write there as before.
+    if (userData?.course) {
+      try {
+        await setDoc(doc(db, "subjects", userData.course), {
+          subjects: subjects,
+          lastUpdated: serverTimestamp()
+        });
+        console.log('Subjects saved to Firestore for course:', userData.course);
+        return;
+      } catch (error) {
+        console.error("Error saving subjects to Firestore:", error);
+        showToast('Cloud save failed. Data saved locally only.', 'error');
+        throw error; // re-throw so awaiting callers know it failed
+      }
     }
+
+    // Fallback: try to locate a course document that contains any of our local subjects
+    // This helps when `userData.course` is not set for the current user (common for some student flows).
     try {
-      await setDoc(doc(db, "subjects", userData.course), {
-        subjects: subjects,
-        lastUpdated: serverTimestamp()
+      console.warn('saveSubjectsToFirestore: no course set, attempting to locate matching course document...');
+      const snap = await getDocs(collection(db, 'subjects'));
+      let foundId = null;
+      snap.forEach(d => {
+        const cloudSubs = d.data()?.subjects || [];
+        // If any subject id matches a local subject id, assume this is the right course doc
+        if (!foundId && cloudSubs.some(cs => subjects.some(ls => ls.id && ls.id === cs.id))) {
+          foundId = d.id;
+        }
       });
-      console.log('Subjects saved to Firestore for course:', userData.course);
+
+      if (foundId) {
+        await setDoc(doc(db, 'subjects', foundId), {
+          subjects: subjects,
+          lastUpdated: serverTimestamp()
+        });
+        console.log('Subjects saved to Firestore for discovered course doc:', foundId);
+        return;
+      }
+
+      console.warn('No matching course document found; skipping cloud save.');
+      showToast('Cloud save skipped: course unknown.', 'error');
+      return;
     } catch (error) {
-      console.error("Error saving subjects to Firestore:", error);
+      console.error('Error searching for course document or saving subjects:', error);
       showToast('Cloud save failed. Data saved locally only.', 'error');
-      throw error; // re-throw so awaiting callers know it failed
+      throw error;
     }
   }
 

@@ -246,10 +246,24 @@ function initializeSubjects() {
     if (autoSync && userData?.course) await saveSubjectsToFirestore();
   }
 
+  // Firestore rejects undefined values — recursively replace them with null.
+  function sanitize(obj) {
+    if (Array.isArray(obj)) return obj.map(sanitize);
+    if (obj !== null && typeof obj === 'object') {
+      const out = {};
+      for (const [k, v] of Object.entries(obj)) {
+        out[k] = v === undefined ? null : sanitize(v);
+      }
+      return out;
+    }
+    return obj;
+  }
+
   async function saveSubjectsToFirestore() {
+    const safe = sanitize(subjects);
     if (userData?.course) {
       try {
-        await setDoc(doc(db, "subjects", userData.course), { subjects, lastUpdated: serverTimestamp() });
+        await setDoc(doc(db, "subjects", userData.course), { subjects: safe, lastUpdated: serverTimestamp() });
         console.log('Subjects saved to Firestore for course:', userData.course);
         return;
       } catch (error) {
@@ -291,7 +305,7 @@ function initializeSubjects() {
       }
 
       if (foundId) {
-        await setDoc(doc(db, 'subjects', foundId), { subjects, lastUpdated: serverTimestamp() });
+        await setDoc(doc(db, 'subjects', foundId), { subjects: safe, lastUpdated: serverTimestamp() });
         // Cache discovered courseId so future saves skip this search
         if (userData) { userData.course = foundId; localStorage.setItem('userData', JSON.stringify(userData)); }
         console.log('Fallback save OK to course doc:', foundId);

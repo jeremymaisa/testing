@@ -337,7 +337,10 @@ function initializeSubjects() {
       const cloud = docSnap.data().subjects;
       if (!cloud || cloud.length === 0) return;
 
+      // Ensure every cloud subject has all required arrays before merging
+      const normalize = s => ({ tasks: [], assignments: [], lessons: [], quizzes: [], ...s });
       const merged = cloud.map(cs => {
+        cs = normalize(cs);
         const ls = subjects.find(s => s.id === cs.id);
         if (!ls) return cs;
 
@@ -440,6 +443,11 @@ function initializeSubjects() {
   // -----------------------------------------------------------------------
   function renderSubjectDetails(index) {
     const sub = subjects[index]; if (!sub) return;
+    // Ensure all arrays exist — subjects loaded from Firestore may be missing fields
+    sub.tasks       = sub.tasks       || [];
+    sub.assignments = sub.assignments || [];
+    sub.lessons     = sub.lessons     || [];
+    sub.quizzes     = sub.quizzes     || [];
     const isInstructor = userRole === 'instructor';
 
     detailsContainer.innerHTML = `
